@@ -12,6 +12,7 @@ from fastmcp import FastMCP
 
 from .tools import (
     build_or_update_graph,
+    detect_changes_func,
     embed_graph,
     find_large_functions,
     get_affected_flows_func,
@@ -379,6 +380,34 @@ def get_architecture_overview_tool(
         repo_root: Repository root path. Auto-detected if omitted.
     """
     return get_architecture_overview_func(repo_root=repo_root)
+
+
+@mcp.tool()
+def detect_changes_tool(
+    base: str = "HEAD~1",
+    changed_files: Optional[list[str]] = None,
+    include_source: bool = False,
+    max_depth: int = 2,
+    repo_root: Optional[str] = None,
+) -> dict:
+    """Detect changes and produce risk-scored, priority-ordered review guidance.
+
+    Primary tool for code review. Maps git diffs to affected functions,
+    flows, communities, and test coverage gaps. Returns risk scores and
+    prioritized review items. Replaces get_review_context for change-aware reviews.
+
+    Args:
+        base: Git ref to diff against. Default: HEAD~1.
+        changed_files: List of changed file paths (relative to repo root). Auto-detected if omitted.
+        include_source: Include source code snippets for changed functions. Default: False.
+        max_depth: Impact radius depth for BFS traversal. Default: 2.
+        repo_root: Repository root path. Auto-detected if omitted.
+    """
+    return detect_changes_func(
+        base=base, changed_files=changed_files,
+        include_source=include_source, max_depth=max_depth,
+        repo_root=repo_root,
+    )
 
 
 def main(repo_root: str | None = None) -> None:

@@ -1,6 +1,6 @@
 """MCP tool definitions for the Code Review Graph server.
 
-Exposes 15 tools:
+Exposes 16 tools:
 1. build_or_update_graph  - full or incremental build
 2. get_impact_radius      - blast radius from changed files
 3. query_graph            - predefined graph queries
@@ -16,6 +16,7 @@ Exposes 15 tools:
 13. list_communities      - list detected code communities
 14. get_community         - get details of a single community
 15. get_architecture_overview - architecture overview from community structure
+16. detect_changes        - risk-scored change impact analysis for code review
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .changes import analyze_changes, parse_git_diff_ranges
 from .communities import get_architecture_overview, get_communities
 from .embeddings import EmbeddingStore, embed_all_nodes
 from .flows import get_affected_flows as _get_affected_flows
@@ -1234,6 +1236,105 @@ def get_architecture_overview_func(
                 f"{n_cross} cross-community edges, {n_warnings} warning(s)"
             ),
             **overview,
+        }
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+    finally:
+        store.close()
+
+
+# ---------------------------------------------------------------------------
+# Tool 16: detect_changes  [REVIEW]
+# ---------------------------------------------------------------------------
+
+
+def detect_changes_func(
+    base: str = "HEAD~1",
+    changed_files: list[str] | None = None,
+    include_source: bool = False,
+    max_depth: int = 2,
+    repo_root: str | None = None,
+) -> dict[str, Any]:
+    """Detect changes and produce risk-scored review guidance.
+
+    [REVIEW] Primary tool for code review.  Maps git diffs to affected
+    functions, flows, communities, and test coverage gaps.  Returns
+    priority-ordered review guidance with risk scores.
+
+    Args:
+        base: Git ref to diff against (default: HEAD~1).
+        changed_files: Explicit list of changed file paths (relative to repo
+            root).  Auto-detected from git diff if omitted.
+        include_source: If True, include source code snippets for changed
+            functions.  Default: False.
+        max_depth: Impact radius depth for BFS traversal.  Default: 2.
+        repo_root: Repository root path.  Auto-detected if omitted.
+
+    Returns:
+        Risk-scored analysis with changed functions, affected flows,
+        test gaps, and review priorities.
+    """
+    store, root = _get_store(repo_root)
+    try:
+        # Detect changed files if not provided.
+        if changed_files is None:
+            changed_files = get_changed_files(root, base)
+            if not changed_files:
+                changed_files = get_staged_and_unstaged(root)
+
+        if not changed_files:
+            return {
+                "status": "ok",
+                "summary": "No changed files detected.",
+                "risk_score": 0.0,
+                "changed_functions": [],
+                "affected_flows": [],
+                "test_gaps": [],
+                "review_priorities": [],
+            }
+
+        # Convert to absolute paths for graph lookup.
+        abs_files = [str(root / f) for f in changed_files]
+
+        # Parse diff ranges for line-level mapping.
+        diff_ranges = parse_git_diff_ranges(str(root), base)
+        # Remap to absolute paths so they match graph file_paths.
+        abs_ranges: dict[str, list[tuple[int, int]]] = {}
+        for rel_path, ranges in diff_ranges.items():
+            abs_path = str(root / rel_path)
+            abs_ranges[abs_path] = ranges
+
+        analysis = analyze_changes(
+            store,
+            changed_files=abs_files,
+            changed_ranges=abs_ranges if abs_ranges else None,
+            repo_root=str(root),
+            base=base,
+        )
+
+        # Optionally include source snippets for changed functions.
+        if include_source:
+            for func in analysis.get("changed_functions", []):
+                fp = func.get("file_path")
+                ls = func.get("line_start")
+                le = func.get("line_end")
+                if fp and ls and le:
+                    file_path = Path(fp)
+                    if file_path.is_file():
+                        try:
+                            lines = file_path.read_text(errors="replace").splitlines()
+                            start = max(0, ls - 1)
+                            end = min(len(lines), le)
+                            func["source"] = "\n".join(
+                                f"{i + 1}: {lines[i]}" for i in range(start, end)
+                            )
+                        except (OSError, UnicodeDecodeError):
+                            func["source"] = "(could not read file)"
+
+        return {
+            "status": "ok",
+            "changed_files": changed_files,
+            **analysis,
         }
     except Exception as exc:
         return {"status": "error", "error": str(exc)}
