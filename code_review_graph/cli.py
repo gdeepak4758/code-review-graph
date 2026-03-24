@@ -108,13 +108,26 @@ def _handle_init(args: argparse.Namespace) -> None:
             existing = json.loads(mcp_path.read_text())
             if "code-review-graph" in existing.get("mcpServers", {}):
                 print(f"Already configured in {mcp_path}")
-                return
-            existing.setdefault("mcpServers", {}).update(mcp_config["mcpServers"])
-            mcp_config = existing
+            else:
+                existing.setdefault("mcpServers", {}).update(mcp_config["mcpServers"])
+                mcp_config = existing
+                if not dry_run:
+                    mcp_path.write_text(json.dumps(mcp_config, indent=2) + "\n")
+                    print(f"Created {mcp_path}")
         except json.JSONDecodeError:
             print(f"Warning: existing {mcp_path} has invalid JSON, overwriting.")
+            if not dry_run:
+                mcp_path.write_text(json.dumps(mcp_config, indent=2) + "\n")
+                print(f"Created {mcp_path}")
         except (KeyError, TypeError):
             print(f"Warning: existing {mcp_path} has unexpected structure, overwriting.")
+            if not dry_run:
+                mcp_path.write_text(json.dumps(mcp_config, indent=2) + "\n")
+                print(f"Created {mcp_path}")
+    else:
+        if not dry_run:
+            mcp_path.write_text(json.dumps(mcp_config, indent=2) + "\n")
+            print(f"Created {mcp_path}")
 
     if dry_run:
         print(f"[dry-run] Would write to {mcp_path}:")
@@ -123,8 +136,24 @@ def _handle_init(args: argparse.Namespace) -> None:
         print("[dry-run] No files were modified.")
         return
 
-    mcp_path.write_text(json.dumps(mcp_config, indent=2) + "\n")
-    print(f"Created {mcp_path}")
+    # Handle --skills, --hooks, --all flags
+    install_all = getattr(args, "install_all", False)
+    want_skills = getattr(args, "skills", False) or install_all
+    want_hooks = getattr(args, "hooks", False) or install_all
+
+    if want_skills or want_hooks:
+        from .skills import generate_skills, inject_claude_md, install_hooks
+
+        if want_skills:
+            skills_dir = generate_skills(repo_root)
+            print(f"Generated skills in {skills_dir}")
+            inject_claude_md(repo_root)
+            print("Updated CLAUDE.md with MCP tools reference")
+
+        if want_hooks:
+            install_hooks(repo_root)
+            print(f"Installed hooks in {repo_root / '.claude' / 'settings.json'}")
+
     print()
     print("Next steps:")
     print("  1. code-review-graph build    # build the knowledge graph")
@@ -151,6 +180,18 @@ def main() -> None:
         "--dry-run", action="store_true",
         help="Show what would be done without writing files",
     )
+    install_cmd.add_argument(
+        "--skills", action="store_true",
+        help="Generate Claude Code skill files in .claude/skills/",
+    )
+    install_cmd.add_argument(
+        "--hooks", action="store_true",
+        help="Install Claude Code hooks in .claude/settings.json",
+    )
+    install_cmd.add_argument(
+        "--all", action="store_true", dest="install_all",
+        help="Install skills, hooks, and CLAUDE.md integration",
+    )
 
     init_cmd = sub.add_parser(
         "init", help="Alias for install"
@@ -159,6 +200,18 @@ def main() -> None:
     init_cmd.add_argument(
         "--dry-run", action="store_true",
         help="Show what would be done without writing files",
+    )
+    init_cmd.add_argument(
+        "--skills", action="store_true",
+        help="Generate Claude Code skill files in .claude/skills/",
+    )
+    init_cmd.add_argument(
+        "--hooks", action="store_true",
+        help="Install Claude Code hooks in .claude/settings.json",
+    )
+    init_cmd.add_argument(
+        "--all", action="store_true", dest="install_all",
+        help="Install skills, hooks, and CLAUDE.md integration",
     )
 
     # build
