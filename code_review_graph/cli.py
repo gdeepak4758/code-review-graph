@@ -9,6 +9,10 @@ Usage:
     code-review-graph status
     code-review-graph serve
     code-review-graph visualize
+    code-review-graph wiki
+    code-review-graph register <path> [--alias name]
+    code-review-graph unregister <path_or_alias>
+    code-review-graph repos
 """
 
 from __future__ import annotations
@@ -76,6 +80,10 @@ def _print_banner() -> None:
     {g}watch{r}       Auto-update on file changes
     {g}status{r}      Show graph statistics
     {g}visualize{r}   Generate interactive HTML graph
+    {g}wiki{r}        Generate markdown wiki from communities
+    {g}register{r}    Register a repository in the multi-repo registry
+    {g}unregister{r}  Remove a repository from the registry
+    {g}repos{r}       List registered repositories
     {g}serve{r}       Start MCP server
 
   {d}Run{r} {b}code-review-graph <command> --help{r} {d}for details{r}
@@ -235,6 +243,30 @@ def main() -> None:
     vis_cmd = sub.add_parser("visualize", help="Generate interactive HTML graph visualization")
     vis_cmd.add_argument("--repo", default=None, help="Repository root (auto-detected)")
 
+    # wiki
+    wiki_cmd = sub.add_parser("wiki", help="Generate markdown wiki from community structure")
+    wiki_cmd.add_argument("--repo", default=None, help="Repository root (auto-detected)")
+    wiki_cmd.add_argument(
+        "--force", action="store_true",
+        help="Regenerate all pages even if content unchanged",
+    )
+
+    # register
+    register_cmd = sub.add_parser(
+        "register", help="Register a repository in the multi-repo registry"
+    )
+    register_cmd.add_argument("path", help="Path to the repository root")
+    register_cmd.add_argument("--alias", default=None, help="Short alias for the repository")
+
+    # unregister
+    unregister_cmd = sub.add_parser(
+        "unregister", help="Remove a repository from the multi-repo registry"
+    )
+    unregister_cmd.add_argument("path_or_alias", help="Repository path or alias to remove")
+
+    # repos
+    sub.add_parser("repos", help="List registered repositories")
+
     # serve
     serve_cmd = sub.add_parser("serve", help="Start MCP server (stdio transport)")
     serve_cmd.add_argument("--repo", default=None, help="Repository root (auto-detected)")
@@ -256,6 +288,37 @@ def main() -> None:
 
     if args.command in ("init", "install"):
         _handle_init(args)
+        return
+
+    if args.command in ("register", "unregister", "repos"):
+        logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+        from .registry import Registry
+
+        registry = Registry()
+        if args.command == "register":
+            try:
+                entry = registry.register(args.path, alias=args.alias)
+                alias_info = f" (alias: {entry['alias']})" if entry.get("alias") else ""
+                print(f"Registered: {entry['path']}{alias_info}")
+            except ValueError as exc:
+                logging.error(str(exc))
+                sys.exit(1)
+        elif args.command == "unregister":
+            if registry.unregister(args.path_or_alias):
+                print(f"Unregistered: {args.path_or_alias}")
+            else:
+                print(f"Not found: {args.path_or_alias}")
+                sys.exit(1)
+        elif args.command == "repos":
+            repos = registry.list_repos()
+            if not repos:
+                print("No repositories registered.")
+                print("Use: code-review-graph register <path> [--alias name]")
+            else:
+                for entry in repos:
+                    alias = entry.get("alias", "")
+                    alias_str = f"  ({alias})" if alias else ""
+                    print(f"  {entry['path']}{alias_str}")
         return
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -317,6 +380,19 @@ def main() -> None:
             generate_html(store, html_path)
             print(f"Visualization: {html_path}")
             print("Open in browser to explore your codebase graph.")
+
+        elif args.command == "wiki":
+            from .wiki import generate_wiki
+            wiki_dir = repo_root / ".code-review-graph" / "wiki"
+            result = generate_wiki(store, wiki_dir, force=args.force)
+            total = result["pages_generated"] + result["pages_updated"] + result["pages_unchanged"]
+            print(
+                f"Wiki: {result['pages_generated']} new, "
+                f"{result['pages_updated']} updated, "
+                f"{result['pages_unchanged']} unchanged "
+                f"({total} total pages)"
+            )
+            print(f"Output: {wiki_dir}")
 
     finally:
         store.close()

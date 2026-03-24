@@ -1,6 +1,6 @@
 """MCP tool definitions for the Code Review Graph server.
 
-Exposes 18 tools:
+Exposes 22 tools:
 1. build_or_update_graph  - full or incremental build
 2. get_impact_radius      - blast radius from changed files
 3. query_graph            - predefined graph queries
@@ -19,10 +19,15 @@ Exposes 18 tools:
 16. detect_changes        - risk-scored change impact analysis for code review
 17. refactor_tool         - unified refactoring (rename preview, dead code, suggestions)
 18. apply_refactor_tool   - apply a previously previewed refactoring
+19. generate_wiki         - generate markdown wiki from community structure
+20. get_wiki_page         - retrieve a specific wiki page
+21. list_repos            - list registered repositories
+22. cross_repo_search     - search across all registered repositories
 """
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +48,8 @@ from .incremental import (
 )
 from .refactor import apply_refactor, find_dead_code, rename_preview, suggest_refactorings
 from .search import hybrid_search
+
+logger = logging.getLogger(__name__)
 
 # Common JS/TS builtin method names filtered from callers_of results.
 # "Who calls .map()?" returns hundreds of hits and is never useful.
@@ -1497,3 +1504,191 @@ def apply_refactor_func(
 
     result = apply_refactor(refactor_id, root)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Tool 19: generate_wiki  [DOCS]
+# ---------------------------------------------------------------------------
+
+
+def generate_wiki_func(
+    repo_root: str | None = None,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Generate a markdown wiki from the community structure.
+
+    [DOCS] Creates a wiki page for each detected community and an index
+    page. Pages are written to ``.code-review-graph/wiki/`` inside the
+    repository. Only regenerates pages whose content has changed unless
+    force=True.
+
+    Args:
+        repo_root: Repository root path. Auto-detected if omitted.
+        force: If True, regenerate all pages even if content is unchanged.
+
+    Returns:
+        Status with pages_generated, pages_updated, pages_unchanged counts.
+    """
+    from .wiki import generate_wiki
+
+    store, root = _get_store(repo_root)
+    try:
+        wiki_dir = root / ".code-review-graph" / "wiki"
+        result = generate_wiki(store, wiki_dir, force=force)
+        total = result["pages_generated"] + result["pages_updated"] + result["pages_unchanged"]
+        return {
+            "status": "ok",
+            "summary": (
+                f"Wiki generated: {result['pages_generated']} new, "
+                f"{result['pages_updated']} updated, "
+                f"{result['pages_unchanged']} unchanged "
+                f"({total} total pages)"
+            ),
+            "wiki_dir": str(wiki_dir),
+            **result,
+        }
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+    finally:
+        store.close()
+
+
+# ---------------------------------------------------------------------------
+# Tool 20: get_wiki_page  [DOCS]
+# ---------------------------------------------------------------------------
+
+
+def get_wiki_page_func(
+    community_name: str,
+    repo_root: str | None = None,
+) -> dict[str, Any]:
+    """Retrieve a specific wiki page by community name.
+
+    [DOCS] Returns the markdown content of the wiki page for the given
+    community. The wiki must have been generated first via generate_wiki.
+
+    Args:
+        community_name: Community name to look up (slugified for filename).
+        repo_root: Repository root path. Auto-detected if omitted.
+
+    Returns:
+        Page content or not_found status.
+    """
+    from .wiki import get_wiki_page
+
+    _, root = _get_store(repo_root)
+    wiki_dir = root / ".code-review-graph" / "wiki"
+    content = get_wiki_page(wiki_dir, community_name)
+    if content is None:
+        return {
+            "status": "not_found",
+            "summary": f"No wiki page found for '{community_name}'.",
+        }
+    return {
+        "status": "ok",
+        "summary": f"Wiki page for '{community_name}' ({len(content)} chars)",
+        "content": content,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Tool 21: list_repos  [REGISTRY]
+# ---------------------------------------------------------------------------
+
+
+def list_repos_func() -> dict[str, Any]:
+    """List all registered repositories.
+
+    [REGISTRY] Returns the list of repositories registered in the global
+    multi-repo registry at ``~/.code-review-graph/registry.json``.
+
+    Returns:
+        List of registered repos with paths and aliases.
+    """
+    from .registry import Registry
+
+    try:
+        registry = Registry()
+        repos = registry.list_repos()
+        return {
+            "status": "ok",
+            "summary": f"{len(repos)} registered repository(ies)",
+            "repos": repos,
+        }
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# Tool 22: cross_repo_search  [REGISTRY]
+# ---------------------------------------------------------------------------
+
+
+def cross_repo_search_func(
+    query: str,
+    kind: str | None = None,
+    limit: int = 20,
+) -> dict[str, Any]:
+    """Search across all registered repositories.
+
+    [REGISTRY] Runs hybrid_search on each registered repo's graph database
+    and merges the results.
+
+    Args:
+        query: Search query string.
+        kind: Optional node kind filter (e.g. "Function", "Class").
+        limit: Maximum results per repo (default: 20).
+
+    Returns:
+        Combined search results from all registered repos.
+    """
+    from .registry import Registry
+
+    try:
+        registry = Registry()
+        repos = registry.list_repos()
+        if not repos:
+            return {
+                "status": "ok",
+                "summary": "No repositories registered. Use 'register' to add repos.",
+                "results": [],
+            }
+
+        all_results: list[dict[str, Any]] = []
+        searched_repos: list[str] = []
+
+        for repo_entry in repos:
+            repo_path = Path(repo_entry["path"])
+            db_path = repo_path / ".code-review-graph" / "graph.db"
+            if not db_path.exists():
+                continue
+
+            try:
+                store = GraphStore(str(db_path))
+                try:
+                    results = hybrid_search(store, query, kind=kind, limit=limit)
+                    alias = repo_entry.get("alias", repo_path.name)
+                    for r in results:
+                        r["repo"] = alias
+                        r["repo_path"] = str(repo_path)
+                    all_results.extend(results)
+                    searched_repos.append(alias)
+                finally:
+                    store.close()
+            except Exception as exc:
+                logger.warning("Search failed for %s: %s", repo_path, exc)
+
+        # Sort all results by score descending
+        all_results.sort(key=lambda r: r.get("score", 0), reverse=True)
+
+        return {
+            "status": "ok",
+            "summary": (
+                f"Found {len(all_results)} result(s) across "
+                f"{len(searched_repos)} repo(s) for '{query}'"
+            ),
+            "results": all_results[:limit],
+            "repos_searched": searched_repos,
+        }
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}

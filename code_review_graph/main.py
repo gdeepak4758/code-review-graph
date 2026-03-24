@@ -20,9 +20,11 @@ from .prompts import (
 from .tools import (
     apply_refactor_func,
     build_or_update_graph,
+    cross_repo_search_func,
     detect_changes_func,
     embed_graph,
     find_large_functions,
+    generate_wiki_func,
     get_affected_flows_func,
     get_architecture_overview_func,
     get_community_func,
@@ -30,9 +32,11 @@ from .tools import (
     get_flow,
     get_impact_radius,
     get_review_context,
+    get_wiki_page_func,
     list_communities_func,
     list_flows,
     list_graph_stats,
+    list_repos_func,
     query_graph,
     refactor_func,
     semantic_search_nodes,
@@ -476,6 +480,70 @@ def apply_refactor_tool(
     return apply_refactor_func(
         refactor_id=refactor_id, repo_root=repo_root,
     )
+
+
+@mcp.tool()
+def generate_wiki_tool(
+    repo_root: Optional[str] = None,
+    force: bool = False,
+) -> dict:
+    """Generate a markdown wiki from the code community structure.
+
+    Creates a wiki page for each detected community and an index page.
+    Pages are written to .code-review-graph/wiki/ inside the repository.
+    Only regenerates pages whose content has changed unless force=True.
+
+    Args:
+        repo_root: Repository root path. Auto-detected if omitted.
+        force: If True, regenerate all pages even if content unchanged. Default: False.
+    """
+    return generate_wiki_func(repo_root=repo_root, force=force)
+
+
+@mcp.tool()
+def get_wiki_page_tool(
+    community_name: str,
+    repo_root: Optional[str] = None,
+) -> dict:
+    """Retrieve a specific wiki page by community name.
+
+    Returns the markdown content of the wiki page for the given community.
+    The wiki must have been generated first via generate_wiki_tool.
+
+    Args:
+        community_name: Community name to look up.
+        repo_root: Repository root path. Auto-detected if omitted.
+    """
+    return get_wiki_page_func(community_name=community_name, repo_root=repo_root)
+
+
+@mcp.tool()
+def list_repos_tool() -> dict:
+    """List all registered repositories in the multi-repo registry.
+
+    Returns the list of repos registered at ~/.code-review-graph/registry.json.
+    Use the CLI 'register' command to add repos.
+    """
+    return list_repos_func()
+
+
+@mcp.tool()
+def cross_repo_search_tool(
+    query: str,
+    kind: Optional[str] = None,
+    limit: int = 20,
+) -> dict:
+    """Search for code entities across all registered repositories.
+
+    Runs hybrid search on each registered repo's graph database and merges
+    the results by score. Register repos first with the CLI 'register' command.
+
+    Args:
+        query: Search string to match against node names.
+        kind: Optional filter: File, Class, Function, Type, or Test.
+        limit: Maximum results per repo. Default: 20.
+    """
+    return cross_repo_search_func(query=query, kind=kind, limit=limit)
 
 
 @mcp.prompt()
