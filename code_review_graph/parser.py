@@ -81,6 +81,9 @@ EXTENSION_TO_LANGUAGE: dict[str, str] = {
     ".r": "r",  # .lower() in detect_language handles .R → .r
     ".mjs": "javascript",
     ".astro": "typescript",
+    ".pl": "perl",
+    ".pm": "perl",
+    ".t": "perl",
 }
 
 # Tree-sitter node type mappings per language
@@ -101,6 +104,7 @@ _CLASS_TYPES: dict[str, list[str]] = {
     ],
     "ruby": ["class", "module"],
     "r": [],  # Classes detected via call pattern-matching, not AST node types
+    "perl": ["package_statement", "class_statement", "role_statement"],
     "kotlin": ["class_declaration", "object_declaration"],
     "swift": ["class_declaration", "struct_declaration", "protocol_declaration"],
     "php": ["class_declaration", "interface_declaration"],
@@ -128,6 +132,7 @@ _FUNCTION_TYPES: dict[str, list[str]] = {
     "csharp": ["method_declaration", "constructor_declaration"],
     "ruby": ["method", "singleton_method"],
     "r": ["function_definition"],
+    "perl": ["subroutine_declaration_statement", "method_declaration_statement"],
     "kotlin": ["function_declaration"],
     "swift": ["function_declaration"],
     "php": ["function_definition", "method_declaration"],
@@ -160,6 +165,7 @@ _IMPORT_TYPES: dict[str, list[str]] = {
     "csharp": ["using_directive"],
     "ruby": ["call"],  # require/require_relative
     "r": ["call"],  # library(), require(), source() — filtered downstream
+    "perl": ["use_statement", "require_expression"],
     "kotlin": ["import_header"],
     "swift": ["import_declaration"],
     "php": ["namespace_use_declaration"],
@@ -182,6 +188,7 @@ _CALL_TYPES: dict[str, list[str]] = {
     "csharp": ["invocation_expression", "object_creation_expression"],
     "ruby": ["call", "method_call"],
     "r": ["call"],
+    "perl": ["function_call_expression", "method_call_expression"],
     "kotlin": ["call_expression"],
     "swift": ["call_expression"],
     "php": ["function_call_expression", "member_call_expression"],
@@ -1132,6 +1139,13 @@ class CodeParser:
                 for child in node.children:
                     if child.type in ("receive", "fallback"):
                         return child.text.decode("utf-8", errors="replace")
+        # Perl: bareword for subroutine names, package for package names
+        if language == "perl":
+            for child in node.children:
+                if child.type == "bareword":
+                    return child.text.decode("utf-8", errors="replace")
+                if child.type == "package" and child.text != b"package":
+                    return child.text.decode("utf-8", errors="replace")
         # For C/C++: function names are inside function_declarator/pointer_declarator
         # Check these first to avoid matching the return type_identifier
         if language in ("c", "cpp") and kind == "function":
@@ -1404,6 +1418,10 @@ class CodeParser:
 
         # Simple call: func_name(args)
         if first.type == "identifier":
+            return first.text.decode("utf-8", errors="replace")
+
+        # Perl: function_call_expression has a 'function' child
+        if first.type == "function":
             return first.text.decode("utf-8", errors="replace")
 
         # Method call: obj.method(args)

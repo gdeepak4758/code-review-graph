@@ -611,3 +611,40 @@ class TestRParsing:
         test_funcs = [n for n in nodes if n.is_test and n.kind == "Test"]
         names = {f.name for f in test_funcs}
         assert "test_add" in names
+
+
+class TestPerlParsing:
+    def setup_method(self):
+        self.parser = CodeParser()
+        self.nodes, self.edges = self.parser.parse_file(FIXTURES / "sample.pl")
+
+    def test_detects_language(self):
+        assert self.parser.detect_language(Path("script.pl")) == "perl"
+        assert self.parser.detect_language(Path("Module.pm")) == "perl"
+        assert self.parser.detect_language(Path("test.t")) == "perl"
+
+    def test_finds_packages(self):
+        classes = [n for n in self.nodes if n.kind == "Class"]
+        names = {c.name for c in classes}
+        assert "Animal" in names
+        assert "Dog" in names
+
+    def test_finds_subroutines(self):
+        funcs = [n for n in self.nodes if n.kind == "Function"]
+        names = {f.name for f in funcs}
+        assert "new" in names
+        assert "speak" in names
+        assert "fetch" in names
+        assert "bark" in names
+
+    def test_finds_imports(self):
+        imports = [e for e in self.edges if e.kind == "IMPORTS_FROM"]
+        assert len(imports) >= 1
+
+    def test_finds_calls(self):
+        calls = [e for e in self.edges if e.kind == "CALLS"]
+        assert len(calls) >= 1
+
+    def test_finds_contains(self):
+        contains = [e for e in self.edges if e.kind == "CONTAINS"]
+        assert len(contains) >= 3
