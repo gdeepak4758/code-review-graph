@@ -271,6 +271,12 @@ def main() -> None:
     vis_cmd = sub.add_parser("visualize", help="Generate interactive HTML graph visualization")
     vis_cmd.add_argument("--repo", default=None, help="Repository root (auto-detected)")
     vis_cmd.add_argument(
+        "--mode",
+        choices=["auto", "full", "community", "file"],
+        default="auto",
+        help="Rendering mode: auto (default), full, community, or file",
+    )
+    vis_cmd.add_argument(
         "--serve", action="store_true",
         help="Start a local HTTP server to view the visualization (localhost:8765)",
     )
@@ -536,8 +542,9 @@ def main() -> None:
         elif args.command == "visualize":
             from .visualization import generate_html
             html_path = repo_root / ".code-review-graph" / "graph.html"
-            generate_html(store, html_path)
-            print(f"Visualization: {html_path}")
+            vis_mode = getattr(args, "mode", "auto") or "auto"
+            generate_html(store, html_path, mode=vis_mode)
+            print(f"Visualization ({vis_mode}): {html_path}")
             if getattr(args, "serve", False):
                 import functools
                 import http.server
