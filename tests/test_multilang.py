@@ -44,6 +44,44 @@ class TestGoParsing:
         contains = [e for e in self.edges if e.kind == "CONTAINS"]
         assert len(contains) >= 3
 
+    def test_methods_attached_to_receiver(self):
+        """Go methods should be attached to their receiver type (#190).
+
+        `func (r *InMemoryRepo) FindByID(...)` should produce a Function node
+        with parent_name='InMemoryRepo' and a CONTAINS edge from the type to
+        the method, so `inheritors_of`/`query_graph` can find methods via the
+        struct they belong to.
+        """
+        funcs = [n for n in self.nodes if n.kind == "Function"]
+        by_name = {f.name: f for f in funcs}
+        assert "FindByID" in by_name
+        assert "Save" in by_name
+        assert by_name["FindByID"].parent_name == "InMemoryRepo"
+        assert by_name["Save"].parent_name == "InMemoryRepo"
+        # Free functions should still have no parent.
+        assert by_name["NewInMemoryRepo"].parent_name is None
+        assert by_name["CreateUser"].parent_name is None
+
+        contains = [(e.source, e.target) for e in self.edges if e.kind == "CONTAINS"]
+        find_by_id_contains = [
+            (s, t) for (s, t) in contains
+            if t.endswith("::InMemoryRepo.FindByID")
+        ]
+        save_contains = [
+            (s, t) for (s, t) in contains
+            if t.endswith("::InMemoryRepo.Save")
+        ]
+        assert find_by_id_contains, (
+            f"no CONTAINS edge for InMemoryRepo.FindByID in {contains}"
+        )
+        assert save_contains, (
+            f"no CONTAINS edge for InMemoryRepo.Save in {contains}"
+        )
+        # Source of each CONTAINS should be the InMemoryRepo type,
+        # not the file path.
+        assert find_by_id_contains[0][0].endswith("::InMemoryRepo")
+        assert save_contains[0][0].endswith("::InMemoryRepo")
+
 
 class TestRustParsing:
     def setup_method(self):

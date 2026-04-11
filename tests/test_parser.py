@@ -345,6 +345,33 @@ class TestCodeParser:
         assert create_dog is not None
         assert create_dog.parent_name is None
 
+    def test_parse_dart_call_edges(self):
+        """Dart CALLS extraction (#87 bug 1).
+
+        tree-sitter-dart doesn't wrap calls in a single ``call_expression``
+        node so the parser has a Dart-specific walker that detects
+        ``identifier + selector > argument_part`` patterns. Verify we
+        capture builtin calls (``print``), constructor calls (``Dog(...)``),
+        and internal method calls (``_run()``).
+        """
+        nodes, edges = self.parser.parse_file(FIXTURES / "sample.dart")
+        calls = [e for e in edges if e.kind == "CALLS"]
+        assert calls, "expected at least one CALLS edge for Dart"
+        targets = [e.target for e in calls]
+        # Builtin print is called at least twice in sample.dart
+        assert sum(1 for t in targets if t == "print") >= 2
+        # _run() is called inside Dog.fetch(); the call target should
+        # either be the bare name "_run" or a qualified form ending in
+        # "::Dog._run" once the call resolver has run.
+        assert any(t == "_run" or t.endswith("::Dog._run") for t in targets), (
+            f"expected _run() call, got targets: {targets}"
+        )
+        # Dog(name) constructor call from createDog() — target may be
+        # bare "Dog" or qualified "...::Dog".
+        assert any(t == "Dog" or t.endswith("::Dog") for t in targets), (
+            f"expected Dog() constructor call, got targets: {targets}"
+        )
+
     # --- tsconfig alias resolution ---
 
     def test_tsconfig_alias_resolution(self):
