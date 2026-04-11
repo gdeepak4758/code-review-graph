@@ -6,6 +6,7 @@ Communicates via stdio (standard MCP transport).
 
 from __future__ import annotations
 
+import sys
 from typing import Optional
 
 from fastmcp import FastMCP
@@ -691,9 +692,21 @@ def pre_merge_check(base: str = "HEAD~1") -> list[dict]:
 
 
 def main(repo_root: str | None = None) -> None:
-    """Run the MCP server via stdio."""
+    """Run the MCP server via stdio.
+
+    On Windows, Python 3.8+ defaults to ``ProactorEventLoop``, which
+    interacts poorly with ``concurrent.futures.ProcessPoolExecutor``
+    (used by ``full_build``) over a stdio MCP transport — the combination
+    produces silent hangs on ``build_or_update_graph_tool`` and
+    ``embed_graph_tool``. Switching to ``WindowsSelectorEventLoopPolicy``
+    before fastmcp starts its loop avoids the deadlock.
+    See: #46, #136
+    """
     global _default_repo_root
     _default_repo_root = repo_root
+    if sys.platform == "win32":
+        import asyncio
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     mcp.run(transport="stdio")
 
 
