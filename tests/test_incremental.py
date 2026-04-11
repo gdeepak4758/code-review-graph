@@ -145,6 +145,39 @@ class TestIgnorePatterns:
         assert _should_ignore(".git/HEAD", patterns)
         assert not _should_ignore("src/main.py", patterns)
 
+    def test_should_ignore_nested_dependency_dirs(self):
+        """Nested node_modules / vendor / .gradle should be ignored (#91)."""
+        patterns = [
+            "node_modules/**", "vendor/**", ".gradle/**", ".venv/**",
+        ]
+        # Monorepo: nested node_modules
+        assert _should_ignore("packages/app/node_modules/react/index.js", patterns)
+        assert _should_ignore("apps/web/node_modules/lodash/index.js", patterns)
+        # PHP/Laravel: vendor at any depth
+        assert _should_ignore("backend/vendor/autoload.php", patterns)
+        # Gradle at any depth
+        assert _should_ignore("android/app/.gradle/cache/metadata.bin", patterns)
+        # Negative: similarly-named dirs that aren't a match
+        assert not _should_ignore("src/node_modules_helper/foo.py", patterns)
+        assert not _should_ignore("src/venv_tools/bar.py", patterns)
+
+    def test_should_ignore_framework_defaults(self):
+        """Default patterns should cover Laravel, Gradle, Flutter, and caches."""
+        from code_review_graph.incremental import DEFAULT_IGNORE_PATTERNS
+
+        patterns = DEFAULT_IGNORE_PATTERNS
+        # Laravel/PHP
+        assert _should_ignore("vendor/autoload.php", patterns)
+        assert _should_ignore("bootstrap/cache/packages.php", patterns)
+        # Gradle/Java
+        assert _should_ignore(".gradle/caches/jars.bin", patterns)
+        assert _should_ignore("build/libs/app.jar", patterns)
+        # Flutter/Dart
+        assert _should_ignore(".dart_tool/package_config.json", patterns)
+        # Coverage/cache
+        assert _should_ignore("coverage/lcov.info", patterns)
+        assert _should_ignore(".cache/webpack/index.pack", patterns)
+
 
 class TestIsBinary:
     def test_text_file_is_not_binary(self, tmp_path):

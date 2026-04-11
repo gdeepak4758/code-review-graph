@@ -14,7 +14,7 @@ import os
 import re
 import subprocess
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Optional
 
 from .graph import GraphStore
@@ -26,7 +26,11 @@ _MAX_PARSE_WORKERS = int(os.environ.get(
 
 logger = logging.getLogger(__name__)
 
-# Default ignore patterns (in addition to .gitignore)
+# Default ignore patterns (in addition to .gitignore).
+#
+# `<dir>/**` patterns are matched at any depth by _should_ignore, so
+# `node_modules/**` also excludes `packages/app/node_modules/react/index.js`
+# inside monorepos. See: #91
 DEFAULT_IGNORE_PATTERNS = [
     ".code-review-graph/**",
     "node_modules/**",
@@ -39,6 +43,21 @@ DEFAULT_IGNORE_PATTERNS = [
     "build/**",
     ".next/**",
     "target/**",
+    # PHP / Laravel / Composer
+    "vendor/**",
+    "bootstrap/cache/**",
+    "public/build/**",
+    # Ruby / Bundler
+    ".bundle/**",
+    # Java / Kotlin / Gradle
+    ".gradle/**",
+    "*.jar",
+    # Dart / Flutter
+    ".dart_tool/**",
+    ".pub-cache/**",
+    # General
+    "coverage/**",
+    ".cache/**",
     "*.min.js",
     "*.min.css",
     "*.map",
@@ -148,8 +167,31 @@ def _load_ignore_patterns(repo_root: Path) -> list[str]:
 
 
 def _should_ignore(path: str, patterns: list[str]) -> bool:
-    """Check if a path matches any ignore pattern."""
-    return any(fnmatch.fnmatch(path, p) for p in patterns)
+    """Check if a path matches any ignore pattern.
+
+    Handles nested occurrences of ``<dir>/**`` patterns: for example,
+    ``node_modules/**`` also matches ``packages/app/node_modules/foo.js``
+    inside monorepos. ``fnmatch`` alone treats ``*`` as not crossing ``/``
+    and only matches the prefix, so we additionally test each path segment
+    against the bare prefix of ``<dir>/**`` patterns. See: #91
+    """
+    # Direct fnmatch first (cheap)
+    if any(fnmatch.fnmatch(path, p) for p in patterns):
+        return True
+    # Then: treat simple single-segment "dir/**" patterns as
+    # "this directory at any depth".
+    parts = PurePosixPath(path).parts
+    for p in patterns:
+        if not p.endswith("/**"):
+            continue
+        prefix = p[:-3]
+        # Only single-segment dir patterns (no "/" inside the prefix)
+        # qualify for nested matching.
+        if "/" in prefix or not prefix:
+            continue
+        if prefix in parts:
+            return True
+    return False
 
 
 def _is_binary(path: Path) -> bool:
