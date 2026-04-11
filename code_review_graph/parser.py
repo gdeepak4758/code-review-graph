@@ -104,6 +104,10 @@ EXTENSION_TO_LANGUAGE: dict[str, str] = {
     ".xs": "c",  # Perl XS: parsed as C to capture functions/structs/includes
     ".lua": "lua",
     ".luau": "luau",
+    ".m": "objc",  # Objective-C (.h still maps to C; .mm defers to C++ for simplicity)
+    ".sh": "bash",
+    ".bash": "bash",
+    ".zsh": "bash",
     ".ipynb": "notebook",
 }
 
@@ -140,6 +144,11 @@ _CLASS_TYPES: dict[str, list[str]] = {
     "dart": ["class_definition", "mixin_declaration", "enum_declaration"],
     "lua": [],  # Lua has no class keyword; table-based OOP handled via constructs handler
     "luau": ["type_definition"],  # Luau type aliases; table-based OOP via constructs handler
+    "objc": [
+        "class_interface", "class_implementation",
+        "category_interface", "protocol_declaration",
+    ],
+    "bash": [],  # Shell has no classes
 }
 
 _FUNCTION_TYPES: dict[str, list[str]] = {
@@ -175,6 +184,12 @@ _FUNCTION_TYPES: dict[str, list[str]] = {
     "dart": ["function_signature"],
     "lua": ["function_declaration"],
     "luau": ["function_declaration"],
+    # Objective-C: method_definition lives inside implementation_definition
+    # inside class_implementation. C-style function_definition is also present
+    # for main() and helper functions.
+    "objc": ["method_definition", "function_definition"],
+    # Bash: only function_definition; everything else is a command.
+    "bash": ["function_definition"],
 }
 
 _IMPORT_TYPES: dict[str, list[str]] = {
@@ -201,6 +216,11 @@ _IMPORT_TYPES: dict[str, list[str]] = {
     # Lua/Luau: require() is a function_call, handled via _extract_lua_constructs
     "lua": [],
     "luau": [],
+    # Objective-C: #import "..." and #include "..." both arrive as preproc_include
+    # (tree-sitter-objc doesn't distinguish via a separate preproc_import node).
+    "objc": ["preproc_include"],
+    # Bash: source / . <file> is a command — handled in _extract_bash_source below.
+    "bash": [],
 }
 
 _CALL_TYPES: dict[str, list[str]] = {
@@ -227,6 +247,11 @@ _CALL_TYPES: dict[str, list[str]] = {
     "solidity": ["call_expression"],
     "lua": ["function_call"],
     "luau": ["function_call"],
+    # Objective-C: [receiver message:args] produces message_expression;
+    # C-style foo(x) produces call_expression.
+    "objc": ["message_expression", "call_expression"],
+    # Bash: every command invocation is a "command" node.
+    "bash": ["command"],
 }
 
 # Patterns that indicate a test function
@@ -928,6 +953,16 @@ class CodeParser:
             ):
                 continue
 
+            # --- Bash-specific constructs ---
+            # ``source ./foo.sh`` and ``. ./foo.sh`` are commands in
+            # tree-sitter-bash; re-interpret them as IMPORTS_FROM edges so
+            # cross-script wiring works the same as in other languages.
+            if language == "bash" and node_type == "command":
+                if self._extract_bash_source_command(
+                    child, file_path, edges,
+                ):
+                    continue
+
             # --- Dart call detection (see #87) ---
             # tree-sitter-dart does not wrap calls in a single
             # ``call_expression`` node; instead the pattern is
@@ -1029,6 +1064,42 @@ class CodeParser:
                 import_map=import_map, defined_names=defined_names,
                 _depth=_depth + 1,
             )
+
+    def _extract_bash_source_command(
+        self,
+        node,
+        file_path: str,
+        edges: list[EdgeInfo],
+    ) -> bool:
+        """Detect ``source foo.sh`` / ``. foo.sh`` and emit an IMPORTS_FROM
+        edge. Returns True if handled (so the main loop skips recursing
+        into this command). See: #197
+        """
+        command_name: Optional[str] = None
+        args: list[str] = []
+        for sub in node.children:
+            if sub.type == "command_name":
+                command_name = sub.text.decode("utf-8", errors="replace").strip()
+            elif sub.type in ("word", "string", "raw_string") and command_name:
+                txt = sub.text.decode("utf-8", errors="replace").strip()
+                # Strip surrounding quotes if present
+                if len(txt) >= 2 and txt[0] in ("'", '"') and txt[-1] == txt[0]:
+                    txt = txt[1:-1]
+                if txt:
+                    args.append(txt)
+        if command_name in ("source", ".") and args:
+            target = args[0]
+            # Try to resolve relative paths to real files
+            resolved = self._resolve_module_to_file(target, file_path, "bash")
+            edges.append(EdgeInfo(
+                kind="IMPORTS_FROM",
+                source=file_path,
+                target=resolved if resolved else target,
+                file_path=file_path,
+                line=node.start_point[0] + 1,
+            ))
+            return True
+        return False
 
     def _extract_dart_calls_from_children(
         self,
@@ -2522,6 +2593,17 @@ class CodeParser:
         """Language-aware module-to-file resolution."""
         caller_dir = Path(file_path).parent
 
+        if language == "bash":
+            # ``source ./lib.sh`` or ``source lib.sh`` — resolve relative
+            # to the caller's directory. See: #197
+            try:
+                target = (caller_dir / module).resolve()
+                if target.is_file():
+                    return str(target)
+            except (OSError, ValueError):
+                pass
+            return None
+
         if language == "python":
             rel_path = module.replace(".", "/")
             candidates = [rel_path + ".py", rel_path + "/__init__.py"]
@@ -2808,14 +2890,32 @@ class CodeParser:
                     return child.text.decode("utf-8", errors="replace")
                 if child.type == "package" and child.text != b"package":
                     return child.text.decode("utf-8", errors="replace")
-        # For C/C++: function names are inside function_declarator/pointer_declarator
-        # Check these first to avoid matching the return type_identifier
-        if language in ("c", "cpp") and kind == "function":
+        # For C/C++/Objective-C: function names are inside
+        # function_declarator / pointer_declarator. Check these first to
+        # avoid matching the return type_identifier as the function name.
+        if language in ("c", "cpp", "objc") and kind == "function":
             for child in node.children:
                 if child.type in ("function_declarator", "pointer_declarator"):
                     result = self._get_name(child, language, kind)
                     if result:
                         return result
+
+        # Objective-C method_definition: the method name is the first
+        # ``identifier`` child (first part of the selector). Multi-part
+        # selectors like ``- (void)add:(int)a to:(int)b`` keep ``add`` as
+        # the canonical method name; later parts are keyword arguments.
+        if language == "objc" and node.type == "method_definition":
+            for child in node.children:
+                if child.type == "identifier":
+                    return child.text.decode("utf-8", errors="replace")
+
+        # Bash function_definition: ``foo() { ... }`` — tree-sitter-bash
+        # stores the function name as a ``word`` child, which the generic
+        # loop below doesn't recognize.
+        if language == "bash" and node.type == "function_definition":
+            for child in node.children:
+                if child.type == "word":
+                    return child.text.decode("utf-8", errors="replace")
         # Go methods: tree-sitter-go uses field_identifier for the name
         # (e.g. func (s *T) MethodName(...) { }). Must run before the generic
         # loop, which would match the result type's type_identifier (e.g. int64).
@@ -3113,6 +3213,33 @@ class CodeParser:
             for child in node.children:
                 if child.type in ("type_identifier", "identifier"):
                     return child.text.decode("utf-8", errors="replace")
+            return None
+
+        # Objective-C: [receiver method:arg] — the method name is the
+        # SECOND identifier-like child (the first is the receiver). For
+        # multi-part selectors like `[obj add:a to:b]` we keep the first
+        # part (`add`) as the call name; later parts are keyword arguments.
+        if language == "objc" and node.type == "message_expression":
+            receiver_skipped = False
+            for child in node.children:
+                if child.type in ("[", "]"):
+                    continue
+                if not receiver_skipped:
+                    # First non-bracket child is the receiver (identifier,
+                    # message_expression for chained calls, etc.)
+                    receiver_skipped = True
+                    continue
+                if child.type == "identifier":
+                    return child.text.decode("utf-8", errors="replace")
+            return None
+
+        # Bash: `command` node's first child is the command name.
+        if language == "bash" and node.type == "command":
+            for child in node.children:
+                if child.type == "command_name":
+                    # command_name wraps a word — get its text
+                    txt = child.text.decode("utf-8", errors="replace").strip()
+                    return txt or None
             return None
 
         # Solidity wraps call targets in an 'expression' node – unwrap it
