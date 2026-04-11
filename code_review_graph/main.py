@@ -571,6 +571,7 @@ def refactor_tool(
 def apply_refactor_tool(
     refactor_id: str,
     repo_root: Optional[str] = None,
+    dry_run: bool = False,
 ) -> dict:
     """Apply a previously previewed refactoring to source files.
 
@@ -584,9 +585,15 @@ def apply_refactor_tool(
     Args:
         refactor_id: The refactor ID from refactor_tool's response.
         repo_root: Repository root path. Auto-detected if omitted.
+        dry_run: If True, return a unified diff of what would change
+            without touching any files. The refactor_id remains valid so
+            the same preview can be applied in a follow-up call without
+            dry_run. Use this for a human-in-the-loop review before
+            committing changes to disk. See: #176
     """
     return apply_refactor_func(
         refactor_id=refactor_id, repo_root=_resolve_repo_root(repo_root),
+        dry_run=dry_run,
     )
 
 
