@@ -194,9 +194,24 @@ def generate_wiki(
 
     page_entries: list[tuple[str, str, int]] = []  # (slug, name, size)
 
+    # Track slugs we've already used in THIS run so two communities that
+    # slugify to the same filename don't overwrite each other (#222 follow-up).
+    # Previously "Data Processing" and "data processing" both became
+    # "data-processing.md", causing silent data loss and inflated "updated"
+    # counters (each collision was counted as an update while only one file
+    # made it to disk).
+    used_slugs: set[str] = set()
+
     for comm in communities:
         name = comm["name"]
-        slug = _slugify(name)
+        base_slug = _slugify(name)
+        slug = base_slug
+        suffix = 2
+        while slug in used_slugs:
+            slug = f"{base_slug}-{suffix}"
+            suffix += 1
+        used_slugs.add(slug)
+
         filename = f"{slug}.md"
         filepath = wiki_path / filename
 
