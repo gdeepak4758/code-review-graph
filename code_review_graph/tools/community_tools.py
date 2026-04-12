@@ -146,6 +146,7 @@ def get_community_func(
 
 def get_architecture_overview_func(
     repo_root: str | None = None,
+    detail_level: str = "standard",
 ) -> dict[str, Any]:
     """Generate an architecture overview based on community structure.
 
@@ -155,6 +156,9 @@ def get_architecture_overview_func(
 
     Args:
         repo_root: Repository root path. Auto-detected if omitted.
+        detail_level: "standard" returns full communities and cross-community
+            edges. "minimal" returns a compact summary with top communities
+            and the highest-coupling relationships.
 
     Returns:
         Architecture overview with communities, cross-community edges,
@@ -162,9 +166,12 @@ def get_architecture_overview_func(
     """
     store, root = _get_store(repo_root)
     try:
-        overview = get_architecture_overview(store)
-        n_communities = len(overview["communities"])
-        n_cross = len(overview["cross_community_edges"])
+        overview = get_architecture_overview(store, detail_level=detail_level)
+        n_communities = overview.get("community_count", len(overview["communities"]))
+        n_cross = overview.get(
+            "cross_community_edge_count",
+            len(overview["cross_community_edges"]),
+        )
         n_warnings = len(overview["warnings"])
         result = {
             "status": "ok",

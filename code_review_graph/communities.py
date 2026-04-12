@@ -776,7 +776,11 @@ def _is_test_community(name: str) -> bool:
     return bool(_TEST_COMMUNITY_RE.search(name))
 
 
-def get_architecture_overview(store: GraphStore) -> dict[str, Any]:
+def get_architecture_overview(
+    store: GraphStore,
+    detail_level: str = "standard",
+    max_items: int = 10,
+) -> dict[str, Any]:
     """Generate an architecture overview based on community structure.
 
     Builds a node-to-community mapping, counts cross-community edges,
@@ -784,6 +788,11 @@ def get_architecture_overview(store: GraphStore) -> dict[str, Any]:
 
     Args:
         store: The GraphStore instance.
+        detail_level: "standard" returns the full communities and every
+            cross-community edge. "minimal" returns only top communities,
+            top couplings, and warning summaries.
+        max_items: Maximum number of communities/couplings/warnings to
+            include in minimal output.
 
     Returns:
         Dict with keys: communities, cross_community_edges, warnings.
@@ -801,6 +810,8 @@ def get_architecture_overview(store: GraphStore) -> dict[str, Any]:
     all_edges = store.get_all_edges()
     cross_edges: list[dict[str, Any]] = []
     cross_counts: Counter[tuple[int, int]] = Counter()
+    total_cross_edges = 0
+    include_full_edges = detail_level != "minimal"
 
     for e in all_edges:
         # TESTED_BY edges are expected cross-community coupling (test → code),
@@ -816,13 +827,15 @@ def get_architecture_overview(store: GraphStore) -> dict[str, Any]:
         ):
             pair = (min(src_comm, tgt_comm), max(src_comm, tgt_comm))
             cross_counts[pair] += 1
-            cross_edges.append({
-                "source_community": src_comm,
-                "target_community": tgt_comm,
-                "edge_kind": e.kind,
-                "source": _sanitize_name(e.source_qualified),
-                "target": _sanitize_name(e.target_qualified),
-            })
+            total_cross_edges += 1
+            if include_full_edges:
+                cross_edges.append({
+                    "source_community": src_comm,
+                    "target_community": tgt_comm,
+                    "edge_kind": e.kind,
+                    "source": _sanitize_name(e.source_qualified),
+                    "target": _sanitize_name(e.target_qualified),
+                })
 
     # Generate warnings for high coupling, skipping test-dominated pairs.
     warnings: list[str] = []
@@ -839,6 +852,40 @@ def get_architecture_overview(store: GraphStore) -> dict[str, Any]:
                 f"High coupling ({count} edges) between "
                 f"'{name1}' and '{name2}'"
             )
+
+    if detail_level == "minimal":
+        top_communities = sorted(
+            (
+                {
+                    "id": c.get("id", 0),
+                    "name": c["name"],
+                    "size": c["size"],
+                    "cohesion": c["cohesion"],
+                    "dominant_language": c.get("dominant_language", ""),
+                }
+                for c in communities
+            ),
+            key=lambda c: (-c["size"], c["name"]),
+        )[:max_items]
+
+        top_couplings = [
+            {
+                "source_community": c1,
+                "target_community": c2,
+                "source_name": comm_name_map.get(c1, f"community-{c1}"),
+                "target_name": comm_name_map.get(c2, f"community-{c2}"),
+                "edge_count": count,
+            }
+            for (c1, c2), count in cross_counts.most_common(max_items)
+        ]
+
+        return {
+            "community_count": len(communities),
+            "cross_community_edge_count": total_cross_edges,
+            "communities": top_communities,
+            "cross_community_edges": top_couplings,
+            "warnings": warnings[:max_items],
+        }
 
     return {
         "communities": communities,

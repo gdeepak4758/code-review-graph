@@ -21,6 +21,7 @@ from code_review_graph.tools import (
 class TestTools:
     def setup_method(self):
         self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.tmp.close()
         self.store = GraphStore(self.tmp.name)
         self._seed_data()
 
@@ -194,6 +195,7 @@ class TestFindLargeFunctions:
 
     def setup_method(self):
         self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.tmp.close()
         self.store = GraphStore(self.tmp.name)
         # Create functions of various sizes
         self.store.upsert_node(NodeInfo(
@@ -701,6 +703,18 @@ class TestCommunityTools:
         assert "Architecture:" in result["summary"]
         assert "communities" in result["summary"]
         assert "cross-community edges" in result["summary"]
+
+    def test_get_architecture_overview_minimal_is_compact(self):
+        result = get_architecture_overview_func(
+            repo_root=str(self.root),
+            detail_level="minimal",
+        )
+        assert result["status"] == "ok"
+        assert "community_count" in result
+        assert "cross_community_edge_count" in result
+        assert "communities" in result
+        assert "cross_community_edges" in result
+        assert all("members" not in c for c in result["communities"])
 
 
 class TestBuildPostprocess:

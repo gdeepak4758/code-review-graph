@@ -136,7 +136,9 @@ repo_root: str | None
 #### `get_architecture_overview_tool`
 ```
 repo_root: str | None
+detail_level: str = "standard"   # "standard" or "minimal"
 ```
+`detail_level="minimal"` returns only the top communities, top couplings, and warning summary to keep architecture exploration token-efficient.
 
 ### Change Analysis and Refactoring Tools
 

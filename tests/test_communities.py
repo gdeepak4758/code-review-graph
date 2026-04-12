@@ -24,6 +24,7 @@ from code_review_graph.parser import EdgeInfo, NodeInfo
 class TestCommunities:
     def setup_method(self):
         self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.tmp.close()
         self.store = GraphStore(self.tmp.name)
 
     def teardown_method(self):
@@ -208,6 +209,23 @@ class TestCommunities:
         overview = get_architecture_overview(self.store)
         for w in overview["warnings"]:
             assert "it:should" not in w, f"Test community should be filtered: {w}"
+
+    def test_architecture_overview_minimal_is_compact(self):
+        """Minimal architecture overview should avoid verbose members/edges."""
+        self._seed_two_clusters()
+        communities = detect_communities(self.store, min_size=2)
+        store_communities(self.store, communities)
+
+        overview = get_architecture_overview(self.store, detail_level="minimal")
+        assert overview["community_count"] >= 1
+        assert "communities" in overview
+        assert "cross_community_edges" in overview
+        assert all("members" not in c for c in overview["communities"])
+        if overview["cross_community_edges"]:
+            edge = overview["cross_community_edges"][0]
+            assert "edge_count" in edge
+            assert "source" not in edge
+            assert "target" not in edge
 
     def test_fallback_file_communities(self):
         """File-based fallback produces communities grouped by file."""
