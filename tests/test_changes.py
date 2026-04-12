@@ -19,10 +19,11 @@ from code_review_graph.parser import EdgeInfo, NodeInfo
 class TestChanges:
     def setup_method(self):
         self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.tmp.close()
         self.store = GraphStore(self.tmp.name)
 
     def teardown_method(self):
-        self.store.close()
+        GraphStore.close(self.store)
         Path(self.tmp.name).unlink(missing_ok=True)
 
     # -- helpers --

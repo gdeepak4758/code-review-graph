@@ -37,6 +37,7 @@ class TestV2Integration:
 
     def setup_method(self):
         self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.tmp.close()
         self.store = GraphStore(self.tmp.name)
         self._seed_realistic_graph()
 

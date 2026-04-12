@@ -396,6 +396,19 @@ class TestNotebookEdgeCases:
         assert len(funcs) == 1
         assert funcs[0].name == "foo"
 
+    def test_databricks_py_crlf_header(self):
+        source = (
+            b"# Databricks notebook source\r\n"
+            b"def foo():\r\n"
+            b"    return 1\r\n"
+        )
+        nodes, edges = self.parser.parse_bytes(Path("crlf_db.py"), source)
+        file_node = [n for n in nodes if n.kind == "File"][0]
+        funcs = [n for n in nodes if n.kind == "Function"]
+        assert file_node.extra.get("notebook_format") == "databricks_py"
+        assert len(funcs) == 1
+        assert funcs[0].name == "foo"
+
     def test_empty_databricks_cells(self):
         """Cells with only magic/shell lines should be skipped."""
         nb = {

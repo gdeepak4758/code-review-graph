@@ -77,8 +77,8 @@ def architecture_map_prompt() -> list[dict]:
                 '3. Call `list_flows(detail_level="minimal")` for critical '
                 "flow names + criticality scores.\n"
                 "4. Only call `get_community(name=<X>, "
-                'detail_level="standard")` for the 1-2 communities the user '
-                "is most interested in.\n"
+                'detail_level="minimal")` for the 1-2 communities the user '
+                "is most interested in; escalate to standard only if needed.\n"
                 "5. Produce a concise Mermaid diagram showing communities as "
                 "boxes and key flows as arrows."
             ),
@@ -107,8 +107,8 @@ def debug_issue_prompt(description: str = "") -> list[dict]:
                 '`query_graph(pattern="callers_of", target=<name>, '
                 'detail_level="minimal")`.\n'
                 "4. If the issue involves execution flow: call "
-                "`get_flow(name=<relevant flow>)` for the single most "
-                "relevant flow.\n"
+                '`get_flow(name=<relevant flow>, detail_level="minimal")` '
+                "for the single most relevant flow.\n"
                 "5. Only call `get_review_context` or `get_impact_radius` "
                 "if you need to trace the blast radius of a specific change."
             ),

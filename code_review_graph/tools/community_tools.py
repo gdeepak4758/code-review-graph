@@ -72,6 +72,7 @@ def get_community_func(
     community_name: str | None = None,
     community_id: int | None = None,
     include_members: bool = False,
+    detail_level: str = "standard",
     repo_root: str | None = None,
 ) -> dict[str, Any]:
     """Get details of a single code community.
@@ -84,6 +85,8 @@ def get_community_func(
                         community_id given.
         community_id: Database ID of the community.
         include_members: If True, include full member node details.
+        detail_level: "standard" returns the stored community payload;
+            "minimal" returns compact metadata plus a small member preview.
         repo_root: Repository root path. Auto-detected if omitted.
 
     Returns:
@@ -112,6 +115,58 @@ def get_community_func(
                     "No community found matching the given criteria."
                 ),
             }
+
+        if detail_level == "minimal":
+            sample_qns = community.get("members", [])[:5]
+            sample_members: list[dict[str, Any]] = []
+            for qn in sample_qns:
+                node = store.get_node(qn)
+                if node is not None:
+                    sample_members.append({
+                        "name": node.name,
+                        "kind": node.kind,
+                        "file_path": node.file_path,
+                    })
+                else:
+                    sample_members.append({"qualified_name": qn})
+
+            compact_community: dict[str, Any] = {
+                "id": community["id"],
+                "name": community["name"],
+                "size": community["size"],
+                "cohesion": community["cohesion"],
+                "dominant_language": community.get("dominant_language", ""),
+                "description": community.get("description", ""),
+                "sample_members": sample_members,
+            }
+            remaining_members = max(len(community.get("members", [])) - len(sample_members), 0)
+            if remaining_members:
+                compact_community["members_truncated"] = remaining_members
+
+            if include_members:
+                cid = community.get("id")
+                if cid is not None:
+                    member_nodes = store.get_nodes_by_community_id(cid)
+                    compact_community["member_details"] = [
+                        node_to_dict(n) for n in member_nodes[:5]
+                    ]
+                    remaining_detail = max(len(member_nodes) - 5, 0)
+                    if remaining_detail:
+                        compact_community["member_details_truncated"] = remaining_detail
+
+            result = {
+                "status": "ok",
+                "summary": (
+                    f"Community '{community['name']}': "
+                    f"{community['size']} nodes, "
+                    f"cohesion {community['cohesion']:.4f}"
+                ),
+                "community": compact_community,
+            }
+            result["_hints"] = generate_hints(
+                "get_community", result, get_session()
+            )
+            return result
 
         if include_members:
             cid = community.get("id")

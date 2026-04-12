@@ -440,6 +440,7 @@ def get_flow_tool(
     flow_id: Optional[int] = None,
     flow_name: Optional[str] = None,
     include_source: bool = False,
+    detail_level: str = "standard",
     repo_root: Optional[str] = None,
 ) -> dict:
     """Get detailed information about a single execution flow.
@@ -453,11 +454,14 @@ def get_flow_tool(
         flow_id: Database ID of the flow.
         flow_name: Name to search for (partial match). Ignored if flow_id given.
         include_source: Include source code snippets for each step. Default: False.
+        detail_level: "standard" for full flow details, "minimal" for a compact
+            flow summary and step preview. Default: standard.
         repo_root: Repository root path. Auto-detected if omitted.
     """
     return get_flow(
         flow_id=flow_id, flow_name=flow_name,
-        include_source=include_source, repo_root=_resolve_repo_root(repo_root),
+        include_source=include_source, detail_level=detail_level,
+        repo_root=_resolve_repo_root(repo_root),
     )
 
 
@@ -515,6 +519,7 @@ def get_community_tool(
     community_name: Optional[str] = None,
     community_id: Optional[int] = None,
     include_members: bool = False,
+    detail_level: str = "standard",
     repo_root: Optional[str] = None,
 ) -> dict:
     """Get detailed information about a single code community.
@@ -529,11 +534,14 @@ def get_community_tool(
         community_name: Name to search for (partial match). Ignored if community_id given.
         community_id: Database ID of the community.
         include_members: Include full member node details. Default: False.
+        detail_level: "standard" for full community payload, "minimal" for
+            compact metadata and sampled members. Default: standard.
         repo_root: Repository root path. Auto-detected if omitted.
     """
     return get_community_func(
         community_name=community_name, community_id=community_id,
-        include_members=include_members, repo_root=_resolve_repo_root(repo_root),
+        include_members=include_members, detail_level=detail_level,
+        repo_root=_resolve_repo_root(repo_root),
     )
 
 

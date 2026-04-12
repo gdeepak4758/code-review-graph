@@ -12,6 +12,7 @@ from code_review_graph.parser import EdgeInfo, NodeInfo
 class TestGraphStore:
     def setup_method(self):
         self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.tmp.close()
         self.store = GraphStore(self.tmp.name)
 
     def teardown_method(self):
@@ -261,6 +262,7 @@ class TestImpactRadiusSql:
 
     def setup_method(self):
         self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        self.tmp.close()
         self.store = GraphStore(self.tmp.name)
         self._build_chain()
 

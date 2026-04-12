@@ -64,6 +64,10 @@ class TestArchitectureMapPrompt:
         result = architecture_map_prompt()
         assert "Mermaid" in result[0]["content"]
 
+    def test_community_lookup_starts_minimal(self):
+        result = architecture_map_prompt()
+        assert 'get_community(name=<X>, detail_level="minimal")' in result[0]["content"]
+
 
 class TestDebugIssuePrompt:
     def test_returns_list_with_messages(self):
@@ -94,6 +98,10 @@ class TestDebugIssuePrompt:
     def test_mentions_get_minimal_context(self):
         result = debug_issue_prompt()
         assert "get_minimal_context" in result[0]["content"]
+
+    def test_flow_lookup_starts_minimal(self):
+        result = debug_issue_prompt()
+        assert 'get_flow(name=<relevant flow>, detail_level="minimal")' in result[0]["content"]
 
 
 class TestOnboardDeveloperPrompt:

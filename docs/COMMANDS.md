@@ -106,8 +106,10 @@ repo_root: str | None
 flow_id: int | None          # Database ID from list_flows_tool
 flow_name: str | None        # Name to search (partial match)
 include_source: bool = False # Include source snippets for each step
+detail_level: str = "standard"   # "standard" or "minimal"
 repo_root: str | None
 ```
+`detail_level="minimal"` returns flow metadata plus a short step preview instead of the full path.
 
 #### `get_affected_flows_tool`
 ```
@@ -130,8 +132,10 @@ repo_root: str | None
 community_name: str | None   # Name to search (partial match)
 community_id: int | None     # Database ID
 include_members: bool = False
+detail_level: str = "standard"   # "standard" or "minimal"
 repo_root: str | None
 ```
+`detail_level="minimal"` returns compact metadata plus sampled members instead of the full member list.
 
 #### `get_architecture_overview_tool`
 ```

@@ -470,6 +470,22 @@ class TestFlowTools:
         assert "depth" in result["summary"]
         assert "criticality" in result["summary"]
 
+    def test_get_flow_minimal_is_compact(self):
+        flows_result = list_flows(repo_root=str(self.root))
+        fid = flows_result["flows"][0]["id"]
+        result = get_flow(
+            flow_id=fid,
+            detail_level="minimal",
+            repo_root=str(self.root),
+        )
+        assert result["status"] == "ok"
+        assert "flow" in result
+        assert "steps_preview" in result["flow"]
+        assert len(result["flow"]["steps_preview"]) >= 1
+        assert "steps" not in result["flow"]
+        assert "path" not in result["flow"]
+        assert "files" in result["flow"]
+
     def test_get_affected_flows_with_changed_file(self):
         result = get_affected_flows_func(
             changed_files=["auth.py"], repo_root=str(self.root)
@@ -686,6 +702,23 @@ class TestCommunityTools:
         result = get_community_func(community_id=cid, repo_root=str(self.root))
         assert "nodes" in result["summary"]
         assert "cohesion" in result["summary"]
+
+    def test_get_community_minimal_is_compact(self):
+        comms_result = list_communities_func(repo_root=str(self.root))
+        cid = comms_result["communities"][0]["id"]
+        result = get_community_func(
+            community_id=cid,
+            include_members=True,
+            detail_level="minimal",
+            repo_root=str(self.root),
+        )
+        assert result["status"] == "ok"
+        assert "community" in result
+        assert "sample_members" in result["community"]
+        assert len(result["community"]["sample_members"]) >= 1
+        assert "members" not in result["community"]
+        assert "member_details" in result["community"]
+        assert len(result["community"]["member_details"]) >= 1
 
     def test_get_architecture_overview_returns_ok(self):
         result = get_architecture_overview_func(repo_root=str(self.root))

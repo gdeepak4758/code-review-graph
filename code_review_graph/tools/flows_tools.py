@@ -91,6 +91,7 @@ def get_flow(
     flow_id: int | None = None,
     flow_name: str | None = None,
     include_source: bool = False,
+    detail_level: str = "standard",
     repo_root: str | None = None,
 ) -> dict[str, Any]:
     """Get details of a single execution flow.
@@ -104,6 +105,8 @@ def get_flow(
         flow_name: Name to search for (partial match). Ignored if flow_id
                    given.
         include_source: If True, include source code snippets for each step.
+        detail_level: "standard" returns the full flow path; "minimal"
+            returns compact metadata plus a preview of the first few steps.
         repo_root: Repository root path. Auto-detected if omitted.
 
     Returns:
@@ -130,6 +133,56 @@ def get_flow(
                 "status": "not_found",
                 "summary": "No flow found matching the given criteria.",
             }
+
+        if detail_level == "minimal":
+            steps = flow.get("steps", [])
+            preview_limit = 5
+            step_preview = [
+                {
+                    k: step[k]
+                    for k in ("name", "kind", "file", "line_start", "line_end")
+                    if k in step and step[k] is not None
+                }
+                for step in steps[:preview_limit]
+            ]
+
+            files_preview: list[str] = []
+            seen_files: set[str] = set()
+            for step in steps:
+                file_path = step.get("file")
+                if isinstance(file_path, str) and file_path not in seen_files:
+                    seen_files.add(file_path)
+                    files_preview.append(file_path)
+                if len(files_preview) >= preview_limit:
+                    break
+
+            compact_flow = {
+                "id": flow["id"],
+                "name": flow["name"],
+                "entry_point_id": flow["entry_point_id"],
+                "depth": flow["depth"],
+                "node_count": flow["node_count"],
+                "file_count": flow["file_count"],
+                "criticality": flow["criticality"],
+                "files": files_preview,
+                "steps_preview": step_preview,
+            }
+            if len(steps) > preview_limit:
+                compact_flow["steps_truncated"] = len(steps) - preview_limit
+
+            result = {
+                "status": "ok",
+                "summary": (
+                    f"Flow '{flow['name']}': {flow['node_count']} nodes, "
+                    f"depth {flow['depth']}, "
+                    f"criticality {flow['criticality']:.4f}"
+                ),
+                "flow": compact_flow,
+            }
+            result["_hints"] = generate_hints(
+                "get_flow", result, get_session()
+            )
+            return result
 
         # Optionally include source snippets for each step
         if include_source and "steps" in flow:

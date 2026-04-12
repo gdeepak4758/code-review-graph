@@ -673,9 +673,7 @@ class CodeParser:
             return self._parse_notebook(path, source)
 
         # Databricks .py notebook exports
-        if language == "python" and source.startswith(
-            b"# Databricks notebook source\n",
-        ):
+        if language == "python" and self._has_databricks_py_header(source):
             return self._parse_databricks_py_notebook(path, source)
 
         # ReScript: regex-based parser (no tree-sitter grammar bundled).
@@ -736,6 +734,16 @@ class CodeParser:
                     ))
 
         return nodes, edges
+
+    def _has_databricks_py_header(self, source: bytes) -> bool:
+        """Return True when the first logical line is the Databricks header."""
+        if not source:
+            return False
+
+        first_line = source.splitlines()[0]
+        if first_line.startswith(b"\xef\xbb\xbf"):
+            first_line = first_line[3:]
+        return first_line.strip() == b"# Databricks notebook source"
 
     def _parse_vue(
         self, path: Path, source: bytes,
@@ -1200,7 +1208,7 @@ class CodeParser:
         text = source.decode("utf-8", errors="replace")
 
         # Strip the header line
-        lines = text.split("\n")
+        lines = text.splitlines()
         if lines and lines[0].strip() == "# Databricks notebook source":
             lines = lines[1:]
 
