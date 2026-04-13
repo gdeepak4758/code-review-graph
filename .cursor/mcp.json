@@ -6,9 +6,9 @@
         "code-review-graph",
         "serve"
       ],
+      "type": "stdio",
       "env": {
-        "CRG_CLIENT_PLATFORM": "claude",
-        "CRG_CLIENT_PROVIDER": "claude"
+        "CRG_CLIENT_PLATFORM": "cursor"
       }
     }
   }

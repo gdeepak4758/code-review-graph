@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import platform
+import re
 import shutil
 import stat
 import sys
@@ -206,12 +207,22 @@ def _detect_serve_command() -> tuple[str, list[str]]:
 
 def _build_server_entry(plat: dict[str, Any], key: str = "") -> dict[str, Any]:
     """Build the MCP server entry for a platform."""
+    provider = {
+        "claude": "claude",
+        "codex": "openai",
+        "antigravity": "gemini",
+    }.get(key)
     command, args = _detect_serve_command()
     entry: dict[str, Any] = {"command": command, "args": args}
     if plat["needs_type"]:
         entry["type"] = "stdio"
     if key == "opencode":
         entry["env"] = []
+    else:
+        env = {"CRG_CLIENT_PLATFORM": key}
+        if provider:
+            env["CRG_CLIENT_PROVIDER"] = provider
+        entry["env"] = env
     return entry
 
 
@@ -222,6 +233,11 @@ def _format_toml_value(value: Any) -> str:
         return f'"{escaped}"'
     if isinstance(value, bool):
         return "true" if value else "false"
+    if isinstance(value, dict):
+        items = ", ".join(
+            f"{key} = {_format_toml_value(val)}" for key, val in value.items()
+        )
+        return "{ " + items + " }"
     if isinstance(value, list):
         return "[" + ", ".join(_format_toml_value(item) for item in value) + "]"
     raise TypeError(f"Unsupported TOML value: {type(value)!r}")
@@ -239,7 +255,13 @@ def _merge_toml_mcp_server(
     if config_path.exists():
         existing = config_path.read_text(encoding="utf-8")
         if section_header in existing:
-            return False
+            updated = _merge_toml_server_section(existing, section_header, server_entry)
+            if updated == existing:
+                return False
+            if dry_run:
+                return True
+            config_path.write_text(updated, encoding="utf-8")
+            return True
 
     section_lines = [section_header]
     for key, value in server_entry.items():
@@ -257,6 +279,67 @@ def _merge_toml_mcp_server(
             prefix += "\n"
     config_path.write_text(prefix + section, encoding="utf-8")
     return True
+
+
+def _merge_toml_server_section(
+    content: str,
+    section_header: str,
+    server_entry: dict[str, Any],
+) -> str:
+    """Merge env metadata into an existing TOML MCP server section."""
+    start = content.find(section_header)
+    if start == -1:
+        return content
+
+    body_start = start + len(section_header)
+    next_section = re.search(r"(?m)^\[", content[body_start:])
+    end = body_start + next_section.start() if next_section else len(content)
+
+    section = content[start:end]
+    desired_env = server_entry.get("env")
+    if not desired_env:
+        return content
+
+    env_line = f"env = {_format_toml_value(desired_env)}"
+    env_match = re.search(r"(?m)^env\s*=.*$", section)
+    if env_match:
+        current_line = env_match.group(0)
+        if current_line == env_line:
+            return content
+        merged_section = (
+            section[:env_match.start()]
+            + env_line
+            + section[env_match.end():]
+        )
+    else:
+        insert_at = len(section)
+        if section and not section.endswith("\n"):
+            section += "\n"
+            insert_at = len(section)
+        merged_section = section[:insert_at] + env_line + "\n" + section[insert_at:]
+
+    return content[:start] + merged_section + content[end:]
+
+
+def _merge_server_env(
+    existing_entry: dict[str, Any],
+    desired_entry: dict[str, Any],
+) -> bool:
+    """Merge required env metadata into an existing server entry."""
+    desired_env = desired_entry.get("env")
+    if isinstance(desired_env, dict):
+        current_env = existing_entry.get("env")
+        if not isinstance(current_env, dict):
+            existing_entry["env"] = dict(desired_env)
+            return True
+        changed = False
+        for key, value in desired_env.items():
+            if current_env.get(key) != value:
+                current_env[key] = value
+                changed = True
+        existing_entry["env"] = current_env
+        return changed
+    return False
 
 
 def install_platform_configs(
@@ -323,9 +406,28 @@ def install_platform_configs(
             arr = existing.get(server_key, [])
             if not isinstance(arr, list):
                 arr = []
-            # Check if already present
-            if any(isinstance(s, dict) and s.get("name") == "code-review-graph" for s in arr):
-                print(f"  {plat['name']}: already configured in {config_path}")
+            existing_entry = next(
+                (
+                    s for s in arr
+                    if isinstance(s, dict) and s.get("name") == "code-review-graph"
+                ),
+                None,
+            )
+            if existing_entry is not None:
+                changed = _merge_server_env(existing_entry, server_entry)
+                if changed:
+                    existing[server_key] = arr
+                    if dry_run:
+                        print(f"  [dry-run] {plat['name']}: would update {config_path}")
+                    else:
+                        config_path.parent.mkdir(parents=True, exist_ok=True)
+                        config_path.write_text(
+                            json.dumps(existing, indent=2) + "\n",
+                            encoding="utf-8",
+                        )
+                        print(f"  {plat['name']}: updated {config_path}")
+                else:
+                    print(f"  {plat['name']}: already configured in {config_path}")
                 configured.append(plat["name"])
                 continue
             arr_entry = {"name": "code-review-graph", **server_entry}
@@ -336,7 +438,23 @@ def install_platform_configs(
             if not isinstance(servers, dict):
                 servers = {}
             if "code-review-graph" in servers:
-                print(f"  {plat['name']}: already configured in {config_path}")
+                changed = _merge_server_env(
+                    servers["code-review-graph"],
+                    server_entry,
+                )
+                if changed:
+                    existing[server_key] = servers
+                    if dry_run:
+                        print(f"  [dry-run] {plat['name']}: would update {config_path}")
+                    else:
+                        config_path.parent.mkdir(parents=True, exist_ok=True)
+                        config_path.write_text(
+                            json.dumps(existing, indent=2) + "\n",
+                            encoding="utf-8",
+                        )
+                        print(f"  {plat['name']}: updated {config_path}")
+                else:
+                    print(f"  {plat['name']}: already configured in {config_path}")
                 configured.append(plat["name"])
                 continue
             servers["code-review-graph"] = server_entry

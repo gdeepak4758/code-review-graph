@@ -392,6 +392,8 @@ class TestInstallPlatformConfigs:
         entry = data["mcp_servers"]["code-review-graph"]
         assert entry["type"] == "stdio"
         assert "serve" in entry["args"]
+        assert entry["env"]["CRG_CLIENT_PLATFORM"] == "codex"
+        assert entry["env"]["CRG_CLIENT_PROVIDER"] == "openai"
 
     @_needs_tomllib
     def test_install_codex_preserves_existing_toml(self, tmp_path):
@@ -460,6 +462,7 @@ class TestInstallPlatformConfigs:
         data = json.loads(config_path.read_text())
         assert "code-review-graph" in data["mcpServers"]
         assert data["mcpServers"]["code-review-graph"]["type"] == "stdio"
+        assert data["mcpServers"]["code-review-graph"]["env"]["CRG_CLIENT_PLATFORM"] == "cursor"
 
     def test_install_windsurf_config(self, tmp_path):
         windsurf_dir = tmp_path / ".codeium" / "windsurf"
@@ -612,6 +615,55 @@ class TestInstallPlatformConfigs:
         data = json.loads(mcp_path.read_text())
         assert "other-server" in data["mcpServers"]
         assert "code-review-graph" in data["mcpServers"]
+
+    def test_existing_claude_config_gets_provider_env(self, tmp_path):
+        mcp_path = tmp_path / ".mcp.json"
+        existing = {
+            "mcpServers": {
+                "code-review-graph": {
+                    "command": "uvx",
+                    "args": ["code-review-graph", "serve"],
+                    "type": "stdio",
+                }
+            }
+        }
+        mcp_path.write_text(json.dumps(existing), encoding="utf-8")
+        install_platform_configs(tmp_path, target="claude")
+        data = json.loads(mcp_path.read_text(encoding="utf-8"))
+        env = data["mcpServers"]["code-review-graph"]["env"]
+        assert env["CRG_CLIENT_PLATFORM"] == "claude"
+        assert env["CRG_CLIENT_PROVIDER"] == "claude"
+
+    def test_existing_codex_config_gets_provider_env(self, tmp_path):
+        codex_config = tmp_path / ".codex" / "config.toml"
+        codex_config.parent.mkdir(parents=True)
+        codex_config.write_text(
+            "\n".join(
+                [
+                    "[mcp_servers.code-review-graph]",
+                    'command = "uvx"',
+                    'args = ["code-review-graph", "serve"]',
+                    'type = "stdio"',
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        with patch.dict(
+            PLATFORMS,
+            {
+                "codex": {
+                    **PLATFORMS["codex"],
+                    "config_path": lambda root: codex_config,
+                    "detect": lambda: True,
+                },
+            },
+        ):
+            install_platform_configs(tmp_path, target="codex")
+        data = tomllib.loads(codex_config.read_text(encoding="utf-8"))
+        env = data["mcp_servers"]["code-review-graph"]["env"]
+        assert env["CRG_CLIENT_PLATFORM"] == "codex"
+        assert env["CRG_CLIENT_PROVIDER"] == "openai"
 
     def test_dry_run_no_write(self, tmp_path):
         configured = install_platform_configs(tmp_path, target="claude", dry_run=True)

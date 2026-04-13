@@ -242,6 +242,7 @@ code-review-graph update --base origin/main    # Custom base ref
 code-review-graph status                       # Graph statistics
 code-review-graph watch                        # Auto-update on file changes
 code-review-graph visualize                    # Generate interactive HTML graph
+code-review-graph dashboard                    # Generate static local token dashboard
 
 # Analysis
 code-review-graph detect-changes               # Risk-scored change analysis

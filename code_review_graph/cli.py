@@ -9,6 +9,7 @@ Usage:
     code-review-graph status
     code-review-graph serve [--http] [--host ADDR] [--port PORT]
     code-review-graph visualize
+    code-review-graph dashboard
     code-review-graph wiki
     code-review-graph detect-changes [--base BASE] [--brief]
     code-review-graph register <path> [--alias name]
@@ -102,6 +103,7 @@ def _print_banner() -> None:
     {g}watch{r}       Auto-update on file changes
     {g}status{r}      Show graph statistics
     {g}visualize{r}   Generate interactive HTML graph
+    {g}dashboard{r}   Generate local session token dashboard
     {g}wiki{r}        Generate markdown wiki from communities
     {g}detect-changes{r} Analyze change impact {d}(risk-scored review){r}
     {g}register{r}    Register a repository in the multi-repo registry
@@ -469,6 +471,21 @@ def main() -> None:
         help="Export format (default: html)",
     )
 
+    # dashboard
+    dash_cmd = sub.add_parser(
+        "dashboard",
+        help="Generate local session token dashboard",
+    )
+    dash_cmd.add_argument("--repo", default=None, help="Repository root (auto-detected)")
+    dash_cmd.add_argument(
+        "--serve", action="store_true",
+        help="Start a local HTTP server to view the dashboard (localhost:8765)",
+    )
+    dash_cmd.add_argument(
+        "--port", type=int, default=8765,
+        help="Port for --serve (default: 8765)",
+    )
+
     # wiki
     wiki_cmd = sub.add_parser("wiki", help="Generate markdown wiki from community structure")
     wiki_cmd.add_argument("--repo", default=None, help="Repository root (auto-detected)")
@@ -801,6 +818,34 @@ def main() -> None:
             sys.exit(1)
     else:
         repo_root = Path(args.repo) if args.repo else find_project_root()
+
+    if args.command == "dashboard":
+        import functools
+        import http.server
+
+        from .incremental import get_data_dir
+        from .session_dashboard import generate_session_dashboard
+
+        html_path = get_data_dir(repo_root) / "session-dashboard.html"
+        generate_session_dashboard(repo_root=repo_root, output_path=html_path)
+        print(f"Dashboard: {html_path}")
+        if getattr(args, "serve", False):
+            serve_dir = html_path.parent
+            port = getattr(args, "port", 8765) or 8765
+            handler = functools.partial(
+                http.server.SimpleHTTPRequestHandler,
+                directory=str(serve_dir),
+            )
+            print(f"Serving at http://localhost:{port}/session-dashboard.html")
+            print("Press Ctrl+C to stop.")
+            with http.server.HTTPServer(("localhost", port), handler) as httpd:
+                try:
+                    httpd.serve_forever()
+                except KeyboardInterrupt:
+                    print("\nServer stopped.")
+        else:
+            print("Open in browser to inspect local session token metrics.")
+        return
 
     db_path = get_db_path(repo_root)
     store = GraphStore(db_path)

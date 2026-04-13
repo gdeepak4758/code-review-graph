@@ -68,7 +68,14 @@ open .code-review-graph/graph.html
 ```
 Interactive D3.js force-directed graph. Starts collapsed (File nodes only) — click a file to expand its children. Use the search bar to filter, and click legend edge types to toggle visibility.
 
-### 6. Semantic search (optional)
+### 6. View local token analytics (optional)
+```bash
+code-review-graph dashboard
+open .code-review-graph/session-dashboard.html
+```
+Writes a static dashboard plus a single local metrics ledger in `.code-review-graph/session_metrics.json`. The view aggregates saved tokens by day and, when the MCP launcher identifies itself, by provider.
+
+### 7. Semantic search (optional)
 ```bash
 pip install "code-review-graph[embeddings]"
 ```
@@ -76,25 +83,25 @@ Then use `embed_graph_tool` to compute vectors. `semantic_search_nodes_tool` aut
 
 Embedding providers: Local (sentence-transformers), Google Gemini, MiniMax. Configure via `CRG_EMBEDDING_MODEL` env var.
 
-### 7. Detect changes with risk scoring (v2)
+### 8. Detect changes with risk scoring (v2)
 ```
 Ask Claude: "Review my recent changes with risk scoring"
 ```
 Uses `detect_changes_tool` to map diffs to affected functions, flows, communities, and test gaps.
 
-### 8. Explore architecture (v2)
+### 9. Explore architecture (v2)
 ```
 Ask Claude: "Show me the architecture of this project"
 ```
 Uses `get_architecture_overview_tool` for community-based architecture map with coupling warnings.
 
-### 9. Generate wiki (v2)
+### 10. Generate wiki (v2)
 ```bash
 code-review-graph wiki
 ```
 Creates markdown wiki pages for each detected community in `.code-review-graph/wiki/`.
 
-### 10. Multi-repo search (v2)
+### 11. Multi-repo search (v2)
 ```bash
 code-review-graph register /path/to/other/repo --alias mylib
 ```
