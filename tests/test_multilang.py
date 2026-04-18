@@ -1202,3 +1202,122 @@ class TestElixirParsing:
         }
         assert any(t.endswith("::Calculator.add") for t in function_targets)
         assert any(t.endswith("::Calculator.compute") for t in function_targets)
+
+
+class TestJuliaParsing:
+    def setup_method(self):
+        self.parser = CodeParser()
+        self.nodes, self.edges = self.parser.parse_file(FIXTURES / "sample.jl")
+
+    def test_detects_language(self):
+        assert self.parser.detect_language(Path("foo.jl")) == "julia"
+
+    def test_finds_module(self):
+        classes = {n.name for n in self.nodes if n.kind == "Class"}
+        assert "SampleModule" in classes
+
+    def test_finds_structs(self):
+        classes = {n.name for n in self.nodes if n.kind == "Class"}
+        assert "Dog" in classes
+        assert "MutablePoint" in classes
+
+    def test_finds_abstract_types(self):
+        classes = {n.name for n in self.nodes if n.kind == "Class"}
+        assert "AbstractAnimal" in classes
+
+    def test_struct_inheritance(self):
+        inherits = [e for e in self.edges if e.kind == "INHERITS"]
+        pairs = {(e.source.split("::")[-1], e.target) for e in inherits}
+        assert ("Dog", "AbstractAnimal") in pairs
+
+    def test_finds_long_form_functions(self):
+        funcs = {n.name for n in self.nodes if n.kind == "Function"}
+        assert "greet" in funcs
+        assert "outer" in funcs
+        assert "inner" in funcs
+        assert "process" in funcs
+        assert "show" in funcs
+
+    def test_finds_short_form_functions(self):
+        funcs = {n.name for n in self.nodes if n.kind == "Function"}
+        assert "add" in funcs
+        assert "square" in funcs
+
+    def test_finds_macros(self):
+        funcs = {n.name for n in self.nodes if n.kind == "Function"}
+        assert "sayhello" in funcs
+
+    def test_finds_imports(self):
+        imports = [e for e in self.edges if e.kind == "IMPORTS_FROM"]
+        targets = {e.target for e in imports}
+        assert "LinearAlgebra" in targets
+        assert "JSON" in targets
+
+    def test_finds_selective_imports(self):
+        imports = [e for e in self.edges if e.kind == "IMPORTS_FROM"]
+        targets = {e.target for e in imports}
+        assert "Statistics.mean" in targets or "Statistics" in targets
+        assert "Statistics.std" in targets or "Statistics" in targets
+
+    def test_finds_base_imports(self):
+        imports = [e for e in self.edges if e.kind == "IMPORTS_FROM"]
+        targets = {e.target for e in imports}
+        assert "Base.show" in targets or "Base" in targets
+        assert "Base.print" in targets or "Base" in targets
+
+    def test_finds_include(self):
+        imports = [e for e in self.edges if e.kind == "IMPORTS_FROM"]
+        targets = {e.target for e in imports}
+        assert any("utils.jl" in t for t in targets)
+
+    def test_finds_calls(self):
+        calls = [e for e in self.edges if e.kind == "CALLS"]
+        assert len(calls) >= 1
+
+    def test_finds_contains(self):
+        contains = [e for e in self.edges if e.kind == "CONTAINS"]
+        assert len(contains) >= 3
+
+    def test_finds_exports(self):
+        refs = [
+            e for e in self.edges
+            if e.kind == "REFERENCES"
+            and e.extra
+            and e.extra.get("julia_export")
+        ]
+        targets = {e.target for e in refs}
+        assert "greet" in targets
+        assert "Dog" in targets
+        assert "process" in targets
+
+    def test_finds_testsets(self):
+        tests = [n for n in self.nodes if n.kind == "Test"]
+        assert any("Arithmetic" in t.name for t in tests)
+
+    def test_nested_function_parent(self):
+        contains = [e for e in self.edges if e.kind == "CONTAINS"]
+        # outer's CONTAINS edge should target inner
+        assert any(
+            "outer" in e.source and e.target.endswith("::inner")
+            for e in contains
+        )
+
+    def test_qualified_function_name(self):
+        funcs = {n.name for n in self.nodes if n.kind == "Function"}
+        # function Base.show(...) -> name is "show", not "Base.show"
+        assert "show" in funcs
+        assert "Base.show" not in funcs
+
+    def test_nodes_have_julia_language(self):
+        nameable = [n for n in self.nodes if n.kind in ("Class", "Function", "Test")]
+        assert all(n.language == "julia" for n in nameable)
+        assert len(nameable) >= 5
+
+    def test_qualified_function_references_base(self):
+        refs = [e for e in self.edges if e.kind == "REFERENCES"]
+        # function Base.show(...) should emit a REFERENCES edge to Base
+        assert any(
+            "show" in e.source and e.target == "Base"
+            for e in refs
+        )
+
