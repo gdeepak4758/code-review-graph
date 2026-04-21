@@ -199,7 +199,7 @@ async def run_postprocess_tool(
 
 
 @mcp.tool()
-def get_minimal_context_tool(
+async def get_minimal_context_tool(
     task: str = "",
     changed_files: Optional[list[str]] = None,
     repo_root: Optional[str] = None,
@@ -218,7 +218,7 @@ def get_minimal_context_tool(
         base: Git ref for diff comparison. Default: HEAD~1.
     """
     resolved_root = _resolve_repo_root(repo_root)
-    result = get_minimal_context(
+    result = await asyncio.to_thread(get_minimal_context, 
         task=task, changed_files=changed_files,
         repo_root=resolved_root, base=base,
     )
@@ -234,7 +234,7 @@ def get_minimal_context_tool(
 
 
 @mcp.tool()
-def get_impact_radius_tool(
+async def get_impact_radius_tool(
     changed_files: Optional[list[str]] = None,
     max_depth: int = 2,
     repo_root: Optional[str] = None,
@@ -254,7 +254,8 @@ def get_impact_radius_tool(
         detail_level: "standard" for full output, "minimal" for compact summary. Default: standard.
     """
     resolved_root = _resolve_repo_root(repo_root)
-    result = get_impact_radius(
+    result = await asyncio.to_thread(
+        get_impact_radius,
         changed_files=changed_files, max_depth=max_depth,
         repo_root=resolved_root, base=base, detail_level=detail_level,
     )
@@ -271,7 +272,7 @@ def get_impact_radius_tool(
 
 
 @mcp.tool()
-def query_graph_tool(
+async def query_graph_tool(
     pattern: str,
     target: str,
     repo_root: Optional[str] = None,
@@ -296,7 +297,7 @@ def query_graph_tool(
         detail_level: "standard" for full output, "minimal" for compact summary. Default: standard.
     """
     resolved_root = _resolve_repo_root(repo_root)
-    result = query_graph(
+    result = await asyncio.to_thread(query_graph,
         pattern=pattern, target=target, repo_root=resolved_root,
         detail_level=detail_level,
     )
@@ -312,7 +313,7 @@ def query_graph_tool(
 
 
 @mcp.tool()
-def get_review_context_tool(
+async def get_review_context_tool(
     changed_files: Optional[list[str]] = None,
     max_depth: int = 2,
     include_source: bool = True,
@@ -337,7 +338,7 @@ def get_review_context_tool(
             token-efficient summary. Default: standard.
     """
     resolved_root = _resolve_repo_root(repo_root)
-    result = get_review_context(
+    result = await asyncio.to_thread(get_review_context,
         changed_files=changed_files, max_depth=max_depth,
         include_source=include_source, max_lines_per_file=max_lines_per_file,
         repo_root=resolved_root, base=base, detail_level=detail_level,
@@ -357,7 +358,7 @@ def get_review_context_tool(
 
 
 @mcp.tool()
-def semantic_search_nodes_tool(
+async def semantic_search_nodes_tool(
     query: str,
     kind: Optional[str] = None,
     limit: int = 20,
@@ -387,7 +388,7 @@ def semantic_search_nodes_tool(
         detail_level: "standard" for full output, "minimal" for compact summary. Default: standard.
     """
     resolved_root = _resolve_repo_root(repo_root)
-    result = semantic_search_nodes(
+    result = await asyncio.to_thread(semantic_search_nodes,
         query=query, kind=kind, limit=limit, repo_root=resolved_root, model=model,
         provider=provider, detail_level=detail_level,
     )
@@ -456,7 +457,7 @@ async def embed_graph_tool(
 
 
 @mcp.tool()
-def list_graph_stats_tool(
+async def list_graph_stats_tool(
     repo_root: Optional[str] = None,
 ) -> dict:
     """Get aggregate statistics about the code knowledge graph.
@@ -468,7 +469,7 @@ def list_graph_stats_tool(
         repo_root: Repository root path. Auto-detected if omitted.
     """
     resolved_root = _resolve_repo_root(repo_root)
-    result = list_graph_stats(repo_root=resolved_root)
+    result = await asyncio.to_thread(list_graph_stats,repo_root=resolved_root)
     return _record_and_return(
         "list_graph_stats",
         result,
@@ -478,7 +479,7 @@ def list_graph_stats_tool(
 
 
 @mcp.tool()
-def get_docs_section_tool(
+async def get_docs_section_tool(
     section_name: str,
     repo_root: Optional[str] = None,
 ) -> dict:
@@ -506,7 +507,7 @@ def get_docs_section_tool(
 
 
 @mcp.tool()
-def find_large_functions_tool(
+async def find_large_functions_tool(
     min_lines: int = 50,
     kind: Optional[str] = None,
     file_path_pattern: Optional[str] = None,
@@ -526,7 +527,7 @@ def find_large_functions_tool(
         repo_root: Repository root path. Auto-detected if omitted.
     """
     resolved_root = _resolve_repo_root(repo_root)
-    result = find_large_functions(
+    result = await asyncio.to_thread(find_large_functions,
         min_lines=min_lines, kind=kind, file_path_pattern=file_path_pattern,
         limit=limit, repo_root=resolved_root,
     )
@@ -543,7 +544,7 @@ def find_large_functions_tool(
 
 
 @mcp.tool()
-def list_flows_tool(
+async def list_flows_tool(
     sort_by: str = "criticality",
     limit: int = 50,
     kind: Optional[str] = None,
@@ -565,7 +566,7 @@ def list_flows_tool(
         repo_root: Repository root path. Auto-detected if omitted.
     """
     resolved_root = _resolve_repo_root(repo_root)
-    result = list_flows(
+    result = await asyncio.to_thread(list_flows,
         repo_root=resolved_root, sort_by=sort_by, limit=limit, kind=kind,
         detail_level=detail_level,
     )
@@ -582,7 +583,7 @@ def list_flows_tool(
 
 
 @mcp.tool()
-def get_flow_tool(
+async def get_flow_tool(
     flow_id: Optional[int] = None,
     flow_name: Optional[str] = None,
     include_source: bool = False,
@@ -605,7 +606,7 @@ def get_flow_tool(
         repo_root: Repository root path. Auto-detected if omitted.
     """
     resolved_root = _resolve_repo_root(repo_root)
-    result = get_flow(
+    result = await asyncio.to_thread(get_flow,
         flow_id=flow_id, flow_name=flow_name,
         include_source=include_source, detail_level=detail_level,
         repo_root=resolved_root,
@@ -623,7 +624,7 @@ def get_flow_tool(
 
 
 @mcp.tool()
-def get_affected_flows_tool(
+async def get_affected_flows_tool(
     changed_files: Optional[list[str]] = None,
     base: str = "HEAD~1",
     repo_root: Optional[str] = None,
@@ -640,7 +641,7 @@ def get_affected_flows_tool(
         repo_root: Repository root path. Auto-detected if omitted.
     """
     resolved_root = _resolve_repo_root(repo_root)
-    result = get_affected_flows_func(
+    result = await asyncio.to_thread(get_affected_flows_func,
         changed_files=changed_files, base=base, repo_root=resolved_root,
     )
     return _record_and_return(
@@ -654,7 +655,7 @@ def get_affected_flows_tool(
 
 
 @mcp.tool()
-def list_communities_tool(
+async def list_communities_tool(
     sort_by: str = "size",
     min_size: int = 0,
     detail_level: str = "standard",
@@ -675,7 +676,7 @@ def list_communities_tool(
         repo_root: Repository root path. Auto-detected if omitted.
     """
     resolved_root = _resolve_repo_root(repo_root)
-    result = list_communities_func(
+    result = await asyncio.to_thread(list_communities_func,
         repo_root=resolved_root, sort_by=sort_by, min_size=min_size,
         detail_level=detail_level,
     )
@@ -691,7 +692,7 @@ def list_communities_tool(
 
 
 @mcp.tool()
-def get_community_tool(
+async def get_community_tool(
     community_name: Optional[str] = None,
     community_id: Optional[int] = None,
     include_members: bool = False,
@@ -715,7 +716,7 @@ def get_community_tool(
         repo_root: Repository root path. Auto-detected if omitted.
     """
     resolved_root = _resolve_repo_root(repo_root)
-    result = get_community_func(
+    result = await asyncio.to_thread(get_community_func,
         community_name=community_name, community_id=community_id,
         include_members=include_members, detail_level=detail_level,
         repo_root=resolved_root,
@@ -733,7 +734,7 @@ def get_community_tool(
 
 
 @mcp.tool()
-def get_architecture_overview_tool(
+async def get_architecture_overview_tool(
     repo_root: Optional[str] = None,
     detail_level: str = "standard",
 ) -> dict:
@@ -749,7 +750,7 @@ def get_architecture_overview_tool(
             architecture summary. Default: standard.
     """
     resolved_root = _resolve_repo_root(repo_root)
-    result = get_architecture_overview_func(
+    result = await asyncio.to_thread(get_architecture_overview_func,
         repo_root=resolved_root,
         detail_level=detail_level,
     )
@@ -811,7 +812,7 @@ async def detect_changes_tool(
 
 
 @mcp.tool()
-def refactor_tool(
+async def refactor_tool(
     mode: str = "rename",
     old_name: Optional[str] = None,
     new_name: Optional[str] = None,
@@ -841,7 +842,7 @@ def refactor_tool(
         repo_root: Repository root path. Auto-detected if omitted.
     """
     resolved_root = _resolve_repo_root(repo_root)
-    result = refactor_func(
+    result = await asyncio.to_thread(refactor_func,
         mode=mode, old_name=old_name, new_name=new_name,
         kind=kind, file_pattern=file_pattern, repo_root=resolved_root,
     )
@@ -859,7 +860,7 @@ def refactor_tool(
 
 
 @mcp.tool()
-def apply_refactor_tool(
+async def apply_refactor_tool(
     refactor_id: str,
     repo_root: Optional[str] = None,
     dry_run: bool = False,
@@ -883,7 +884,7 @@ def apply_refactor_tool(
             committing changes to disk. See: #176
     """
     resolved_root = _resolve_repo_root(repo_root)
-    result = apply_refactor_func(
+    result = await asyncio.to_thread(apply_refactor_func,
         refactor_id=refactor_id, repo_root=resolved_root,
         dry_run=dry_run,
     )
@@ -932,7 +933,7 @@ async def generate_wiki_tool(
 
 
 @mcp.tool()
-def get_wiki_page_tool(
+async def get_wiki_page_tool(
     community_name: str,
     repo_root: Optional[str] = None,
 ) -> dict:
@@ -946,7 +947,7 @@ def get_wiki_page_tool(
         repo_root: Repository root path. Auto-detected if omitted.
     """
     resolved_root = _resolve_repo_root(repo_root)
-    result = get_wiki_page_func(
+    result = await asyncio.to_thread(get_wiki_page_func,
         community_name=community_name, repo_root=resolved_root,
     )
     return _record_and_return(
@@ -958,7 +959,6 @@ def get_wiki_page_tool(
     )
 
 
-@mcp.tool()
 def get_hub_nodes_tool(
     top_n: int = 10,
     repo_root: Optional[str] = None,
@@ -1084,13 +1084,13 @@ def traverse_graph_tool(
 
 
 @mcp.tool()
-def list_repos_tool() -> dict:
+async def list_repos_tool() -> dict:
     """List all registered repositories in the multi-repo registry.
 
     Returns the list of repos registered at ~/.code-review-graph/registry.json.
     Use the CLI 'register' command to add repos.
     """
-    result = list_repos_func()
+    result = await asyncio.to_thread(list_repos_func)
     return _record_and_return(
         "list_repos",
         result,
@@ -1099,7 +1099,7 @@ def list_repos_tool() -> dict:
 
 
 @mcp.tool()
-def cross_repo_search_tool(
+async def cross_repo_search_tool(
     query: str,
     kind: Optional[str] = None,
     limit: int = 20,
@@ -1114,7 +1114,7 @@ def cross_repo_search_tool(
         kind: Optional filter: File, Class, Function, Type, or Test.
         limit: Maximum results per repo. Default: 20.
     """
-    result = cross_repo_search_func(query=query, kind=kind, limit=limit)
+    result = await asyncio.to_thread(cross_repo_search_func,query=query, kind=kind, limit=limit)
     return _record_and_return(
         "cross_repo_search",
         result,

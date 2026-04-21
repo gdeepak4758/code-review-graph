@@ -4,8 +4,8 @@ import * as vscode from 'vscode';
 
 const execFileAsync = promisify(execFile);
 
-const CLI_TIMEOUT_MS = 60_000;
-const INSTALL_TIMEOUT_MS = 120_000;
+const CLI_TIMEOUT_MS = 120_000;
+const INSTALL_TIMEOUT_MS = 300_000;
 
 export interface CliResult {
     success: boolean;

@@ -19,7 +19,7 @@ from .graph import GraphNode, GraphStore, _sanitize_name, node_to_dict
 
 logger = logging.getLogger(__name__)
 
-_GIT_TIMEOUT = int(os.environ.get("CRG_GIT_TIMEOUT", "30"))  # seconds, configurable
+_GIT_TIMEOUT = int(os.environ.get("CRG_GIT_TIMEOUT", "60"))  # seconds, configurable
 
 _SAFE_GIT_REF = re.compile(r"^[A-Za-z0-9_.~^/@{}\-]+$")
 _SAFE_SVN_REV = re.compile(r"^r?\d+(:r?\d+|:HEAD|:BASE|:COMMITTED)?$", re.IGNORECASE)
