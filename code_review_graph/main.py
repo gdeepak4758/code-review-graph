@@ -11,7 +11,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+import warnings
 from typing import Optional
+
+# Suppress noisy deprecation warnings from dependencies (e.g. authlib in fastmcp)
+# that can clutter stderr or potentially slow down startup.
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="authlib")
+warnings.filterwarnings("ignore", category=UserWarning, module="authlib")
 
 from fastmcp import FastMCP
 
@@ -138,6 +144,7 @@ async def build_or_update_graph_tool(
         recurse_submodules: If True, include files from git submodules.
             When None (default), falls back to CRG_RECURSE_SUBMODULES env var.
     """
+    from .tools import build_or_update_graph
     resolved_root = _resolve_repo_root(repo_root)
     result = await asyncio.to_thread(
         build_or_update_graph,
@@ -181,6 +188,7 @@ async def run_postprocess_tool(
         fts: Rebuild FTS index. Default: True.
         repo_root: Repository root path. Auto-detected if omitted.
     """
+    from .tools import run_postprocess
     resolved_root = _resolve_repo_root(repo_root)
     result = await asyncio.to_thread(
         run_postprocess,
@@ -217,6 +225,7 @@ async def get_minimal_context_tool(
         repo_root: Repository root path. Auto-detected if omitted.
         base: Git ref for diff comparison. Default: HEAD~1.
     """
+    from .tools import get_minimal_context
     resolved_root = _resolve_repo_root(repo_root)
     result = await asyncio.to_thread(get_minimal_context, 
         task=task, changed_files=changed_files,
@@ -253,6 +262,7 @@ async def get_impact_radius_tool(
         base: Git ref for auto-detecting changes. Default: HEAD~1.
         detail_level: "standard" for full output, "minimal" for compact summary. Default: standard.
     """
+    from .tools import get_impact_radius
     resolved_root = _resolve_repo_root(repo_root)
     result = await asyncio.to_thread(
         get_impact_radius,
@@ -296,6 +306,7 @@ async def query_graph_tool(
         repo_root: Repository root path. Auto-detected if omitted.
         detail_level: "standard" for full output, "minimal" for compact summary. Default: standard.
     """
+    from .tools import query_graph
     resolved_root = _resolve_repo_root(repo_root)
     result = await asyncio.to_thread(query_graph,
         pattern=pattern, target=target, repo_root=resolved_root,
@@ -337,6 +348,7 @@ async def get_review_context_tool(
         detail_level: "standard" for full output, "minimal" for
             token-efficient summary. Default: standard.
     """
+    from .tools import get_review_context
     resolved_root = _resolve_repo_root(repo_root)
     result = await asyncio.to_thread(get_review_context,
         changed_files=changed_files, max_depth=max_depth,
@@ -387,6 +399,7 @@ async def semantic_search_nodes_tool(
                   or "minimax". Must match the provider used during embed_graph.
         detail_level: "standard" for full output, "minimal" for compact summary. Default: standard.
     """
+    from .tools import semantic_search_nodes
     resolved_root = _resolve_repo_root(repo_root)
     result = await asyncio.to_thread(semantic_search_nodes,
         query=query, kind=kind, limit=limit, repo_root=resolved_root, model=model,
@@ -440,6 +453,7 @@ async def embed_graph_tool(
                   CRG_OPENAI_MODEL env vars and accepts any OpenAI-compatible
                   endpoint (real OpenAI, Azure, new-api, LiteLLM, vLLM, etc.).
     """
+    from .tools import embed_graph
     resolved_root = _resolve_repo_root(repo_root)
     result = await asyncio.to_thread(
         embed_graph,
@@ -468,6 +482,7 @@ async def list_graph_stats_tool(
     Args:
         repo_root: Repository root path. Auto-detected if omitted.
     """
+    from .tools import list_graph_stats
     resolved_root = _resolve_repo_root(repo_root)
     result = await asyncio.to_thread(list_graph_stats,repo_root=resolved_root)
     return _record_and_return(
@@ -526,6 +541,7 @@ async def find_large_functions_tool(
         limit: Maximum results. Default: 50.
         repo_root: Repository root path. Auto-detected if omitted.
     """
+    from .tools import find_large_functions
     resolved_root = _resolve_repo_root(repo_root)
     result = await asyncio.to_thread(find_large_functions,
         min_lines=min_lines, kind=kind, file_path_pattern=file_path_pattern,
@@ -565,6 +581,7 @@ async def list_flows_tool(
                       returns only name, criticality, and node_count per flow.
         repo_root: Repository root path. Auto-detected if omitted.
     """
+    from .tools import list_flows
     resolved_root = _resolve_repo_root(repo_root)
     result = await asyncio.to_thread(list_flows,
         repo_root=resolved_root, sort_by=sort_by, limit=limit, kind=kind,
@@ -605,6 +622,7 @@ async def get_flow_tool(
             flow summary and step preview. Default: standard.
         repo_root: Repository root path. Auto-detected if omitted.
     """
+    from .tools import get_flow
     resolved_root = _resolve_repo_root(repo_root)
     result = await asyncio.to_thread(get_flow,
         flow_id=flow_id, flow_name=flow_name,
@@ -640,6 +658,7 @@ async def get_affected_flows_tool(
         base: Git ref for auto-detecting changes. Default: HEAD~1.
         repo_root: Repository root path. Auto-detected if omitted.
     """
+    from .tools import get_affected_flows_func
     resolved_root = _resolve_repo_root(repo_root)
     result = await asyncio.to_thread(get_affected_flows_func,
         changed_files=changed_files, base=base, repo_root=resolved_root,
@@ -675,6 +694,7 @@ async def list_communities_tool(
                       per community.
         repo_root: Repository root path. Auto-detected if omitted.
     """
+    from .tools import list_communities_func
     resolved_root = _resolve_repo_root(repo_root)
     result = await asyncio.to_thread(list_communities_func,
         repo_root=resolved_root, sort_by=sort_by, min_size=min_size,
@@ -715,6 +735,7 @@ async def get_community_tool(
             compact metadata and sampled members. Default: standard.
         repo_root: Repository root path. Auto-detected if omitted.
     """
+    from .tools import get_community_func
     resolved_root = _resolve_repo_root(repo_root)
     result = await asyncio.to_thread(get_community_func,
         community_name=community_name, community_id=community_id,
@@ -749,6 +770,7 @@ async def get_architecture_overview_tool(
         detail_level: "standard" for full output, "minimal" for a compact
             architecture summary. Default: standard.
     """
+    from .tools import get_architecture_overview_func
     resolved_root = _resolve_repo_root(repo_root)
     result = await asyncio.to_thread(get_architecture_overview_func,
         repo_root=resolved_root,
@@ -791,6 +813,7 @@ async def detect_changes_tool(
         detail_level: "standard" for full output, "minimal" for
             token-efficient summary. Default: standard.
     """
+    from .tools import detect_changes_func
     resolved_root = _resolve_repo_root(repo_root)
     result = await asyncio.to_thread(
         detect_changes_func,
@@ -841,6 +864,7 @@ async def refactor_tool(
         file_pattern: (dead_code) Filter by file path substring.
         repo_root: Repository root path. Auto-detected if omitted.
     """
+    from .tools import refactor_func
     resolved_root = _resolve_repo_root(repo_root)
     result = await asyncio.to_thread(refactor_func,
         mode=mode, old_name=old_name, new_name=new_name,
@@ -883,6 +907,7 @@ async def apply_refactor_tool(
             dry_run. Use this for a human-in-the-loop review before
             committing changes to disk. See: #176
     """
+    from .tools import apply_refactor_func
     resolved_root = _resolve_repo_root(repo_root)
     result = await asyncio.to_thread(apply_refactor_func,
         refactor_id=refactor_id, repo_root=resolved_root,
@@ -917,6 +942,7 @@ async def generate_wiki_tool(
         repo_root: Repository root path. Auto-detected if omitted.
         force: If True, regenerate all pages even if content unchanged. Default: False.
     """
+    from .tools import generate_wiki_func
     resolved_root = _resolve_repo_root(repo_root)
     result = await asyncio.to_thread(
         generate_wiki_func,
@@ -946,6 +972,7 @@ async def get_wiki_page_tool(
         community_name: Community name to look up.
         repo_root: Repository root path. Auto-detected if omitted.
     """
+    from .tools import get_wiki_page_func
     resolved_root = _resolve_repo_root(repo_root)
     result = await asyncio.to_thread(get_wiki_page_func,
         community_name=community_name, repo_root=resolved_root,
@@ -1090,6 +1117,7 @@ async def list_repos_tool() -> dict:
     Returns the list of repos registered at ~/.code-review-graph/registry.json.
     Use the CLI 'register' command to add repos.
     """
+    from .tools import list_repos_func
     result = await asyncio.to_thread(list_repos_func)
     return _record_and_return(
         "list_repos",
@@ -1114,6 +1142,7 @@ async def cross_repo_search_tool(
         kind: Optional filter: File, Class, Function, Type, or Test.
         limit: Maximum results per repo. Default: 20.
     """
+    from .tools import cross_repo_search_func
     result = await asyncio.to_thread(cross_repo_search_func,query=query, kind=kind, limit=limit)
     return _record_and_return(
         "cross_repo_search",

@@ -721,7 +721,7 @@ class EmbeddingStore:
             isolation_level=None,
         )
         self._conn.row_factory = sqlite3.Row
-        self._conn.executescript(_EMBEDDINGS_SCHEMA)
+        self._conn.executescript(f"PRAGMA busy_timeout=30000; {_EMBEDDINGS_SCHEMA}")
 
         # Migration for existing DBs missing the provider column
         try:
