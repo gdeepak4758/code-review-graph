@@ -325,8 +325,8 @@ def analyze_changes(
     # Overall risk score: max of individual risks, or 0.
     overall_risk = max((nr["risk_score"] for nr in node_risks), default=0.0)
 
-    # Affected flows.
-    affected = get_affected_flows(store, changed_files)
+    # Affected flows (metadata only for summary efficiency).
+    affected = get_affected_flows(store, changed_files, include_steps=False)
 
     # Detect test gaps: changed functions without TESTED_BY edges.
     test_gaps: list[dict[str, Any]] = []
@@ -362,7 +362,7 @@ def analyze_changes(
         "summary": "\n".join(summary_parts),
         "risk_score": overall_risk,
         "changed_functions": node_risks,
-        "affected_flows": affected["affected_flows"],
+        "affected_flows": affected["affected_flows"][:50],
         "test_gaps": test_gaps,
         "review_priorities": review_priorities,
     }

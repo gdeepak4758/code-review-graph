@@ -18,7 +18,7 @@ When using code-review-graph MCP tools, follow these rules:
   - `parser.py` — Tree-sitter multi-language AST parser (19 languages including Vue SFC, Solidity, Dart, R, Perl, Lua + Jupyter/Databricks notebooks)
   - `graph.py` — SQLite-backed graph store (nodes, edges, BFS impact analysis)
   - `tools.py` — 22 MCP tool implementations
-  - `main.py` — FastMCP server entry point (stdio transport), registers 22 tools + 5 prompts
+  - `main.py` — Asynchronous FastMCP server entry point (stdio transport), registers 22 tools + 5 prompts. Uses `asyncio.to_thread` to prevent event loop blocking on Windows.
   - `incremental.py` — Git-based change detection, file watching
   - `embeddings.py` — Optional vector embeddings (Local sentence-transformers, Google Gemini, MiniMax)
   - `visualization.py` — D3.js interactive HTML graph generator
@@ -40,7 +40,8 @@ When using code-review-graph MCP tools, follow these rules:
   - Separate subproject with its own `package.json`, `tsconfig.json`
   - Reads from `.code-review-graph/graph.db` via SQLite
 
-- **Database**: `.code-review-graph/graph.db` (SQLite, WAL mode)
+- **Database**: `.code-review-graph/graph.db` (SQLite, WAL mode, busy_timeout=30s)
+- **Timeouts**: CLI operations have a 120s timeout (increased for large repos); Git ops have a 60s timeout.
 
 ## Key Commands
 
@@ -71,6 +72,8 @@ uv run code-review-graph eval               # Run evaluation benchmarks
 - **Thread safety**: `threading.Lock` for shared caches, `check_same_thread=False` for SQLite
 - **Node names**: Always sanitize via `_sanitize_name()` before returning to MCP clients
 - **File reads**: Read bytes once, hash, then parse (TOCTOU-safe pattern)
+- **Windows Async**: Always use `async def` for tools and `WindowsSelectorEventLoopPolicy` to avoid stdio deadlocks
+- **Dependency Noise**: Suppress noisy loggers (`authlib`, `pydantic`) and warnings to keep the MCP channel clean
 
 ## Security Invariants
 

@@ -16,8 +16,15 @@ from typing import Optional
 
 # Suppress noisy deprecation warnings from dependencies (e.g. authlib in fastmcp)
 # that can clutter stderr or potentially slow down startup.
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="authlib")
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=UserWarning, module="authlib")
+warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
+warnings.filterwarnings("ignore", message=".*PydanticDeprecatedSince20.*")
+
+# Silence noisy dependency loggers
+logging.getLogger("authlib").setLevel(logging.ERROR)
+logging.getLogger("pydantic").setLevel(logging.ERROR)
+logging.getLogger("fastmcp").setLevel(logging.WARNING)
 
 from fastmcp import FastMCP
 

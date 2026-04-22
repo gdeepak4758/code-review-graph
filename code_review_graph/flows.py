@@ -610,11 +610,12 @@ def get_flows(
     return results
 
 
-def get_flow_by_id(store: GraphStore, flow_id: int) -> Optional[dict]:
-    """Retrieve a single flow with full path details.
+def get_flow_by_id(store: GraphStore, flow_id: int, include_steps: bool = True) -> Optional[dict]:
+    """Retrieve a single flow with optional full path details.
 
-    Returns a dict with the flow metadata plus a ``steps`` list containing
-    each node's name, kind, file, and line info.
+    Returns a dict with the flow metadata. If ``include_steps`` is True,
+    includes a ``steps`` list containing each node's name, kind, file,
+    and line info.
     """
     # NOTE: get_flow_by_id reads from the flows table; see store_flows note.
     row = store._conn.execute(
@@ -625,20 +626,27 @@ def get_flow_by_id(store: GraphStore, flow_id: int) -> Optional[dict]:
 
     path_ids: list[int] = json.loads(row["path_json"])
 
-    # Build detailed step info.
     steps: list[dict] = []
-    for nid in path_ids:
-        node = store.get_node_by_id(nid)
-        if node:
-            steps.append({
-                "node_id": node.id,
-                "name": _sanitize_name(node.name),
-                "kind": node.kind,
-                "file": node.file_path,
-                "line_start": node.line_start,
-                "line_end": node.line_end,
-                "qualified_name": _sanitize_name(node.qualified_name),
-            })
+    if include_steps:
+        # Build detailed step info in a single query for efficiency.
+        placeholders = ",".join(["?"] * len(path_ids))
+        node_rows = store._conn.execute(
+            f"SELECT * FROM nodes WHERE id IN ({placeholders})", path_ids
+        ).fetchall()
+        node_map = {r["id"]: r for r in node_rows}
+
+        for nid in path_ids:
+            row_node = node_map.get(nid)
+            if row_node:
+                steps.append({
+                    "node_id": row_node["id"],
+                    "name": _sanitize_name(row_node["name"]),
+                    "kind": row_node["kind"],
+                    "file": row_node["file_path"],
+                    "line_start": row_node["line_start"],
+                    "line_end": row_node["line_end"],
+                    "qualified_name": _sanitize_name(row_node["qualified_name"]),
+                })
 
     return {
         "id": row["id"],
@@ -658,6 +666,7 @@ def get_flow_by_id(store: GraphStore, flow_id: int) -> Optional[dict]:
 def get_affected_flows(
     store: GraphStore,
     changed_files: list[str],
+    include_steps: bool = True,
 ) -> dict:
     """Find flows that include nodes from the given changed files.
 
@@ -685,7 +694,7 @@ def get_affected_flows(
 
     affected: list[dict] = []
     for fid in flow_ids:
-        flow = get_flow_by_id(store, fid)
+        flow = get_flow_by_id(store, fid, include_steps=include_steps)
         if flow:
             affected.append(flow)
 
