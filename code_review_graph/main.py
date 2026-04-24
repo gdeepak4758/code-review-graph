@@ -5,6 +5,7 @@ Communicates via stdio (standard MCP transport), or use
 ``code-review-graph serve --http`` for Streamable HTTP on localhost (port 5555
 by default).
 """
+# ruff: noqa: I001
 
 from __future__ import annotations
 
@@ -26,9 +27,9 @@ logging.getLogger("authlib").setLevel(logging.ERROR)
 logging.getLogger("pydantic").setLevel(logging.ERROR)
 logging.getLogger("fastmcp").setLevel(logging.WARNING)
 
-from fastmcp import FastMCP
+from fastmcp import FastMCP  # noqa: E402
 
-from .prompts import (
+from .prompts import (  # noqa: E402
     architecture_map_prompt,
     debug_issue_prompt,
     onboard_developer_prompt,
@@ -234,7 +235,7 @@ async def get_minimal_context_tool(
     """
     from .tools import get_minimal_context
     resolved_root = _resolve_repo_root(repo_root)
-    result = await asyncio.to_thread(get_minimal_context, 
+    result = await asyncio.to_thread(get_minimal_context,
         task=task, changed_files=changed_files,
         repo_root=resolved_root, base=base,
     )
