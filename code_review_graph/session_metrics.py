@@ -14,7 +14,6 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -151,35 +150,6 @@ def _increment_counter(
     counter["estimated_saved_tokens"] += saved_tokens
 
 
-@lru_cache(maxsize=1)
-def _get_baseline_replayers() -> dict[str, Any]:
-    from .tools import (
-        detect_changes_func,
-        get_architecture_overview_func,
-        get_community_func,
-        get_flow,
-        get_impact_radius,
-        get_review_context,
-        list_communities_func,
-        list_flows,
-        query_graph,
-        semantic_search_nodes,
-    )
-
-    return {
-        "detect_changes": detect_changes_func,
-        "get_architecture_overview": get_architecture_overview_func,
-        "get_community": get_community_func,
-        "get_flow": get_flow,
-        "get_impact_radius": get_impact_radius,
-        "get_review_context": get_review_context,
-        "list_communities": list_communities_func,
-        "list_flows": list_flows,
-        "query_graph": query_graph,
-        "semantic_search_nodes": semantic_search_nodes,
-    }
-
-
 def _estimate_baseline_tokens(
     tool_name: str,
     args: dict[str, Any],
@@ -187,7 +157,15 @@ def _estimate_baseline_tokens(
     actual_tokens: int,
     status: str = "ok",
 ) -> int:
-    """Estimate standard-mode tokens for a minimal call at record time."""
+    """Estimate standard-mode tokens without replaying the tool call.
+
+    Session metrics run after an MCP tool has already completed, so they must
+    never redo graph work. Earlier versions replayed minimal calls in standard
+    mode to estimate token savings, which could turn a fast tool response into
+    a hidden timeout on large repositories.
+    """
+    del tool_name, repo_root
+
     if status != "ok":
         return actual_tokens
 
@@ -195,25 +173,9 @@ def _estimate_baseline_tokens(
     if detail_level != "minimal":
         return actual_tokens
 
-    replay = _get_baseline_replayers().get(tool_name)
-    if replay is None:
-        return actual_tokens
-
-    replay_args = dict(args)
-    replay_args["detail_level"] = "standard"
-    if not replay_args.get("repo_root"):
-        replay_args["repo_root"] = str(repo_root)
-
-    try:
-        replay_result = replay(**replay_args)
-    except Exception as exc:
-        logger.debug("Baseline replay failed for %s: %s", tool_name, exc)
-        return actual_tokens
-
-    if not isinstance(replay_result, dict):
-        return actual_tokens
-
-    return estimate_tokens(_strip_hints(replay_result))
+    # Conservative approximation for dashboards. It preserves the direction of
+    # savings without running another query, traversal, or change analysis.
+    return max(actual_tokens + 1, actual_tokens * 4)
 
 
 def _normalize_session(

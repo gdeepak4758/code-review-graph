@@ -6,7 +6,7 @@
 
 ## Graph Tool Usage (Token-Efficient)
 When using code-review-graph MCP tools, follow these rules:
-1. First call: `get_minimal_context(task="<description>")` — costs ~100 tokens, gives you the full picture.
+1. First call: `get_minimal_context(task="<description>")` — costs ~100 tokens, gives you the full picture. If the graph MCP call times out, fall back to git diff / targeted file reads and say why.
 2. All subsequent calls: use `detail_level="minimal"` unless you need more.
 3. Prefer `query_graph` with a specific target over broad `list_*` calls.
 4. The `next_tool_suggestions` field in every response tells you the optimal next step.
@@ -168,11 +168,10 @@ bd close <id>         # Complete work
 <!-- code-review-graph MCP tools -->
 ## MCP Tools: code-review-graph
 
-**IMPORTANT: This project has a knowledge graph. ALWAYS use the
-code-review-graph MCP tools BEFORE using Grep/Glob/Read to explore
-the codebase.** The graph is faster, cheaper (fewer tokens), and gives
-you structural context (callers, dependents, test coverage) that file
-scanning cannot.
+**IMPORTANT: This project has a knowledge graph. Try the code-review-graph
+MCP tools BEFORE using Grep/Glob/Read to explore the codebase.** The graph
+is faster, cheaper (fewer tokens), and gives you structural context
+(callers, dependents, test coverage) that file scanning cannot.
 
 ### When to use graph tools FIRST
 
@@ -182,7 +181,9 @@ scanning cannot.
 - **Finding relationships**: `query_graph` with callers_of/callees_of/imports_of/tests_for
 - **Architecture questions**: `get_architecture_overview` + `list_communities`
 
-Fall back to Grep/Glob/Read **only** when the graph doesn't cover what you need.
+Fall back to Grep/Glob/Read when the graph doesn't cover what you need, the
+graph database is missing/stale, or an MCP graph call times out. Mention the
+fallback briefly so the user understands why raw file inspection was needed.
 
 ### Key Tools
 

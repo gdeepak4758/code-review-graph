@@ -86,11 +86,10 @@ bd close <id>         # Complete work
 <!-- code-review-graph MCP tools -->
 ## MCP Tools: code-review-graph
 
-**IMPORTANT: This project has a knowledge graph. ALWAYS use the
-code-review-graph MCP tools BEFORE using Grep/Glob/Read to explore
-the codebase.** The graph is faster, cheaper (fewer tokens), and gives
-you structural context (callers, dependents, test coverage) that file
-scanning cannot.
+**IMPORTANT: This project has a knowledge graph. Try the code-review-graph
+MCP tools BEFORE using Grep/Glob/Read to explore the codebase.** The graph
+is faster, cheaper (fewer tokens), and gives you structural context
+(callers, dependents, test coverage) that file scanning cannot.
 
 ### When to use graph tools FIRST
 
@@ -100,7 +99,9 @@ scanning cannot.
 - **Finding relationships**: `query_graph` with callers_of/callees_of/imports_of/tests_for
 - **Architecture questions**: `get_architecture_overview` + `list_communities`
 
-Fall back to Grep/Glob/Read **only** when the graph doesn't cover what you need.
+Fall back to Grep/Glob/Read when the graph doesn't cover what you need, the
+graph database is missing/stale, or an MCP graph call times out. Mention the
+fallback briefly so the user understands why raw file inspection was needed.
 
 ### Key Tools
 

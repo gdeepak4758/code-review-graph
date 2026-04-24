@@ -128,6 +128,37 @@ def test_dashboard_uses_saved_tokens_stored_at_write_time(tmp_path):
     assert "Daily Saved Tokens" in content
 
 
+def test_metrics_estimate_saved_tokens_without_replaying_tools(tmp_path, monkeypatch):
+    reset_session_metrics()
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def fail_import(name, *args, **kwargs):
+        if name == "code_review_graph.tools":
+            raise AssertionError("metrics must not replay graph tools")
+        return original_import(name, *args, **kwargs)
+
+    original_import = __import__
+    monkeypatch.setattr("builtins.__import__", fail_import)
+
+    record_tool_call(
+        "query_graph",
+        args={
+            "pattern": "file_summary",
+            "target": "src/auth.py",
+            "repo_root": str(repo),
+            "detail_level": "minimal",
+        },
+        result={"status": "ok", "summary": "compact"},
+        repo_root=repo,
+    )
+
+    data = load_session_metrics(repo)
+    call = data["sessions"][0]["calls"][0]
+    assert call["estimated_baseline_tokens"] > call["actual_tokens"]
+    assert call["estimated_saved_tokens"] > 0
+
+
 def test_metrics_keep_durable_totals_after_recent_session_cap(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()

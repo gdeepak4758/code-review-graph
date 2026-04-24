@@ -7,7 +7,7 @@ Quick install: pip install code-review-graph
 Then: code-review-graph install && code-review-graph build
 First run: /code-review-graph:build-graph
 After that use only delta/pr commands.
-ALWAYS start with get_minimal_context_tool(task="your task") — returns ~100 tokens with risk, communities, flows, and suggested next tools.
+Start with get_minimal_context_tool(task="your task") when the MCP server is responsive — returns ~100 tokens with risk, communities, flows, and suggested next tools. If a graph call times out, fall back to git diff / targeted file reads and mention the fallback.
 Use detail_level="minimal" on all subsequent calls unless you need more detail.
 </section>
 
@@ -28,7 +28,7 @@ MCP tools (24): get_minimal_context_tool, build_or_update_graph_tool, run_postpr
 MCP prompts (5): review_changes, architecture_map, debug_issue, onboard_developer, pre_merge_check
 Skills: build-graph, review-delta, review-pr
 CLI: code-review-graph [install|init|build|update|status|watch|visualize|serve|wiki|detect-changes|postprocess|register|unregister|repos|eval]
-Token efficiency: All tools support detail_level="minimal" for compact output. Always call get_minimal_context_tool first.
+Token efficiency: All tools support detail_level="minimal" for compact output. Call get_minimal_context_tool first when available; fall back to targeted raw inspection if the graph call times out.
 </section>
 
 <section name="legal">

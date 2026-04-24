@@ -495,8 +495,10 @@ _SKILLS: dict[str, dict[str, str]] = {
             "- Use `children_of` on a file to see all its functions and classes.\n"
             "- Use `find_large_functions` to identify complex code.\n\n"
             "## Token Efficiency Rules\n"
-            '- ALWAYS start with `get_minimal_context(task="<your task>")` '
-            "before any other graph tool.\n"
+            '- Start with `get_minimal_context(task="<your task>")` '
+            "before any other graph tool when the MCP server is responsive.\n"
+            "- If a graph call times out, fall back to git diff or targeted "
+            "file reads and briefly say why.\n"
             '- Use `detail_level="minimal"` on all calls. Only escalate to '
             '"standard" when minimal is insufficient.\n'
             "- Target: complete any review/debug/refactor task in ≤5 tool calls "
@@ -523,8 +525,10 @@ _SKILLS: dict[str, dict[str, str]] = {
             "- Suggested improvements\n"
             "- Overall merge recommendation\n\n"
             "## Token Efficiency Rules\n"
-            '- ALWAYS start with `get_minimal_context(task="<your task>")` '
-            "before any other graph tool.\n"
+            '- Start with `get_minimal_context(task="<your task>")` '
+            "before any other graph tool when the MCP server is responsive.\n"
+            "- If a graph call times out, fall back to git diff or targeted "
+            "file reads and briefly say why.\n"
             '- Use `detail_level="minimal"` on all calls. Only escalate to '
             '"standard" when minimal is insufficient.\n'
             "- Target: complete any review/debug/refactor task in ≤5 tool calls "
@@ -549,8 +553,10 @@ _SKILLS: dict[str, dict[str, str]] = {
             "- Look at affected flows to find the entry point that triggers the bug.\n"
             "- Recent changes are the most common source of new issues.\n\n"
             "## Token Efficiency Rules\n"
-            '- ALWAYS start with `get_minimal_context(task="<your task>")` '
-            "before any other graph tool.\n"
+            '- Start with `get_minimal_context(task="<your task>")` '
+            "before any other graph tool when the MCP server is responsive.\n"
+            "- If a graph call times out, fall back to git diff or targeted "
+            "file reads and briefly say why.\n"
             '- Use `detail_level="minimal"` on all calls. Only escalate to '
             '"standard" when minimal is insufficient.\n'
             "- Target: complete any review/debug/refactor task in ≤5 tool calls "
@@ -577,8 +583,10 @@ _SKILLS: dict[str, dict[str, str]] = {
             "- Use `get_affected_flows` to ensure no critical paths are broken.\n"
             "- Run `find_large_functions` to identify decomposition targets.\n\n"
             "## Token Efficiency Rules\n"
-            '- ALWAYS start with `get_minimal_context(task="<your task>")` '
-            "before any other graph tool.\n"
+            '- Start with `get_minimal_context(task="<your task>")` '
+            "before any other graph tool when the MCP server is responsive.\n"
+            "- If a graph call times out, fall back to git diff or targeted "
+            "file reads and briefly say why.\n"
             '- Use `detail_level="minimal"` on all calls. Only escalate to '
             '"standard" when minimal is insufficient.\n'
             "- Target: complete any review/debug/refactor task in ≤5 tool calls "
@@ -762,11 +770,10 @@ _CLAUDE_MD_SECTION_MARKER = "<!-- code-review-graph MCP tools -->"
 _CLAUDE_MD_SECTION = f"""{_CLAUDE_MD_SECTION_MARKER}
 ## MCP Tools: code-review-graph
 
-**IMPORTANT: This project has a knowledge graph. ALWAYS use the
-code-review-graph MCP tools BEFORE using Grep/Glob/Read to explore
-the codebase.** The graph is faster, cheaper (fewer tokens), and gives
-you structural context (callers, dependents, test coverage) that file
-scanning cannot.
+**IMPORTANT: This project has a knowledge graph. Try the code-review-graph
+MCP tools BEFORE using Grep/Glob/Read to explore the codebase.** The graph
+is faster, cheaper (fewer tokens), and gives you structural context
+(callers, dependents, test coverage) that file scanning cannot.
 
 ### When to use graph tools FIRST
 
@@ -776,7 +783,9 @@ scanning cannot.
 - **Finding relationships**: `query_graph` with callers_of/callees_of/imports_of/tests_for
 - **Architecture questions**: `get_architecture_overview` + `list_communities`
 
-Fall back to Grep/Glob/Read **only** when the graph doesn't cover what you need.
+Fall back to Grep/Glob/Read when the graph doesn't cover what you need, the
+graph database is missing/stale, or an MCP graph call times out. Mention the
+fallback briefly so the user understands why raw file inspection was needed.
 
 ### Key Tools
 

@@ -15,7 +15,7 @@ from __future__ import annotations
 _TOKEN_EFFICIENCY_PREAMBLE = (  # nosec B105 — prompt template, not a password
     """\
 ## Rules for Token-Efficient Graph Usage
-1. ALWAYS call `get_minimal_context` first with a task description.
+1. Call `get_minimal_context` first with a task description when the MCP server is responsive.
 2. Use `detail_level="minimal"` on all tool calls unless the minimal output \
 is insufficient.
 3. Only escalate to `detail_level="standard"` or `"verbose"` for the specific \
@@ -23,7 +23,9 @@ entities that need deeper inspection.
 4. Never request more than 3 tool calls per turn unless absolutely necessary.
 5. Prefer targeted queries (query_graph with a specific symbol) over broad \
 scans (list_communities with full members).
-6. When reviewing changes: detect_changes(detail_level="minimal") → only \
+6. If a graph call times out, fall back to git diff / targeted file reads and \
+briefly say why.
+7. When reviewing changes: detect_changes(detail_level="minimal") → only \
 expand on high-risk items.
 """
 )
