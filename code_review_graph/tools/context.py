@@ -13,25 +13,52 @@ from ._common import _get_store, compact_response
 logger = logging.getLogger(__name__)
 
 
-def _has_git_changes(root: Path, base: str) -> bool:
-    """Quick check for uncommitted or diffed changes."""
+_GIT_TIMEOUT_SECONDS = 5
+
+
+def _changed_files_from_status(output: str) -> list[str]:
+    """Parse ``git status --porcelain`` paths, including renames."""
+    files: list[str] = []
+    for line in output.splitlines():
+        if len(line) <= 3:
+            continue
+        entry = line[3:].strip()
+        if " -> " in entry:
+            entry = entry.split(" -> ", 1)[1]
+        if entry:
+            files.append(entry)
+    return files
+
+
+def _get_changed_files_fast(root: Path, base: str) -> list[str]:
+    """Best-effort changed-file discovery for the minimal context tool."""
+    files: list[str] = []
     try:
         result = subprocess.run(
             ["git", "diff", "--name-only", base, "--"],
             capture_output=True, text=True,
-            cwd=str(root), timeout=10,
+            cwd=str(root), timeout=_GIT_TIMEOUT_SECONDS,
         )
         if result.returncode == 0 and result.stdout.strip():
-            return True
-        # Also check staged/unstaged
+            files.extend(f.strip() for f in result.stdout.splitlines() if f.strip())
+
         result2 = subprocess.run(
             ["git", "status", "--porcelain"],
             capture_output=True, text=True,
-            cwd=str(root), timeout=10,
+            cwd=str(root), timeout=_GIT_TIMEOUT_SECONDS,
         )
-        return bool(result2.stdout.strip())
+        if result2.returncode == 0 and result2.stdout.strip():
+            files.extend(_changed_files_from_status(result2.stdout))
     except (FileNotFoundError, subprocess.TimeoutExpired):
-        return False
+        return []
+
+    seen: set[str] = set()
+    unique_files: list[str] = []
+    for file in files:
+        if file not in seen:
+            seen.add(file)
+            unique_files.append(file)
+    return unique_files
 
 
 def get_minimal_context(
@@ -57,40 +84,18 @@ def get_minimal_context(
         # 1. Quick stats
         stats = store.get_stats()
 
-        # 2. Risk from changed files
+        # 2. Cheap changed-file signal.
+        #
+        # This tool is the first MCP call agents make, so it must stay cheap.
+        # Deep risk scoring can traverse callers, flows, and test gaps; leave
+        # that to detect_changes_tool after the agent has decided it needs it.
         risk = "unknown"
         risk_score = 0.0
         top_affected: list[str] = []
         test_gap_count = 0
-        if changed_files or _has_git_changes(root, base):
-            try:
-                from ..changes import analyze_changes
-                from ..incremental import get_changed_files as _get_changed
-
-                files = changed_files
-                if not files:
-                    files = _get_changed(root, base)
-                if files:
-                    abs_files = [str(root / f) for f in files]
-                    analysis = analyze_changes(
-                        store, abs_files, repo_root=str(root), base=base,
-                    )
-                    risk_score = analysis.get("risk_score", 0.0)
-                    risk = (
-                        "high" if risk_score > 0.7
-                        else "medium" if risk_score > 0.4
-                        else "low"
-                    )
-                    top_affected = [
-                        f.get("name", "")
-                        for f in analysis.get("changed_functions", [])[:5]
-                    ]
-                    test_gap_count = len(analysis.get("test_gaps", []))
-            except (
-                ImportError, OSError, ValueError,
-                sqlite3.Error, subprocess.SubprocessError,
-            ):
-                logger.debug("Risk analysis failed in get_minimal_context", exc_info=True)
+        files = changed_files if changed_files is not None else _get_changed_files_fast(root, base)
+        if files:
+            top_affected = files[:5]
 
         # 3. Top 3 communities
         communities: list[str] = []
@@ -137,6 +142,10 @@ def get_minimal_context(
         ]
         if risk != "unknown":
             summary_parts.append(f"Risk: {risk} ({risk_score:.2f}).")
+        elif files:
+            summary_parts.append(
+                f"{len(files)} changed file(s); run detect_changes for risk."
+            )
         if test_gap_count:
             summary_parts.append(f"{test_gap_count} test gaps.")
 

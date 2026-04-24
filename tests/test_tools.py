@@ -1193,3 +1193,22 @@ class TestGetMinimalContext:
             task="refactor auth module", repo_root=str(self.root),
         )
         assert "refactor" in result["next_tool_suggestions"]
+
+    def test_explicit_changed_files_do_not_run_deep_analysis(self, monkeypatch):
+        import code_review_graph.changes as changes
+        from code_review_graph.tools.context import get_minimal_context
+
+        def fail_analysis(*args, **kwargs):
+            raise AssertionError("minimal context should not run deep analysis")
+
+        monkeypatch.setattr(changes, "analyze_changes", fail_analysis)
+
+        result = get_minimal_context(
+            task="review changes",
+            changed_files=["app.py"],
+            repo_root=str(self.root),
+        )
+
+        assert result["status"] == "ok"
+        assert result["key_entities"] == ["app.py"]
+        assert "detect_changes" in result["next_tool_suggestions"]
