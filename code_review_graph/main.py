@@ -96,7 +96,7 @@ def _resolve_repo_root(repo_root: Optional[str]) -> Optional[str]:
 def _record_and_return(
     tool_name: str,
     result: dict,
-    repo_root: Optional[str],
+    resolved_repo_root: Optional[str],
     **args: object,
 ) -> dict:
     """Persist local session metrics without affecting tool behavior."""
@@ -105,7 +105,7 @@ def _record_and_return(
             tool_name=tool_name,
             args=args,
             result=result,
-            repo_root=repo_root,
+            repo_root=resolved_repo_root,
         )
     except Exception as exc:
         logger.debug("Session metric recording failed for %s: %s", tool_name, exc)
