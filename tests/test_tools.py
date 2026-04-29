@@ -1159,6 +1159,33 @@ class TestGetMinimalContext:
         assert "summary" in result
         assert "next_tool_suggestions" in result
 
+    def test_auto_changed_files_git_commands_detach_stdin(self, monkeypatch):
+        import subprocess
+        from types import SimpleNamespace
+
+        from code_review_graph.tools import context as context_tools
+
+        calls = []
+
+        def fake_run(cmd, **kwargs):
+            calls.append((cmd, kwargs))
+            stdout = "app.py\n" if "diff" in cmd else ""
+            return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
+
+        monkeypatch.setattr(context_tools.subprocess, "run", fake_run)
+
+        result = context_tools.get_minimal_context(
+            task="review changes", repo_root=str(self.root),
+        )
+
+        assert result["status"] == "ok"
+        assert result["key_entities"] == ["app.py"]
+        assert calls
+        assert all(
+            kwargs.get("stdin") is subprocess.DEVNULL
+            for _cmd, kwargs in calls
+        )
+
     def test_output_is_compact(self):
         import json
 

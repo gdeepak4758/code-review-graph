@@ -366,6 +366,7 @@ class TestGitOperations:
         call_args = mock_run.call_args
         assert "git" in call_args[0][0]
         assert call_args[1].get("timeout") == 30
+        assert call_args[1].get("stdin") is subprocess.DEVNULL
 
     @patch("code_review_graph.incremental.subprocess.run")
     def test_get_changed_files_fallback(self, mock_run, tmp_path):
@@ -377,6 +378,10 @@ class TestGitOperations:
         result = get_changed_files(tmp_path)
         assert result == ["staged.py"]
         assert mock_run.call_count == 2
+        assert all(
+            call.kwargs.get("stdin") is subprocess.DEVNULL
+            for call in mock_run.call_args_list
+        )
 
     @patch("code_review_graph.incremental.subprocess.run")
     def test_get_changed_files_timeout(self, mock_run, tmp_path):
@@ -396,6 +401,7 @@ class TestGitOperations:
         assert "new_name.py" in result
         # old.py should NOT be in results (renamed away)
         assert "old.py" not in result
+        assert mock_run.call_args.kwargs.get("stdin") is subprocess.DEVNULL
 
     @patch("code_review_graph.incremental.subprocess.run")
     def test_get_all_tracked_files(self, mock_run, tmp_path):
@@ -405,6 +411,7 @@ class TestGitOperations:
         )
         result = get_all_tracked_files(tmp_path)
         assert result == ["a.py", "b.py", "c.go"]
+        assert mock_run.call_args.kwargs.get("stdin") is subprocess.DEVNULL
 
     @patch("code_review_graph.incremental.subprocess.run")
     def test_get_all_tracked_files_recurse_submodules_param(

@@ -38,6 +38,7 @@ def _get_changed_files_fast(root: Path, base: str) -> list[str]:
             ["git", "diff", "--name-only", base, "--"],
             capture_output=True, text=True,
             cwd=str(root), timeout=_GIT_TIMEOUT_SECONDS,
+            stdin=subprocess.DEVNULL,
         )
         if result.returncode == 0 and result.stdout.strip():
             files.extend(f.strip() for f in result.stdout.splitlines() if f.strip())
@@ -46,6 +47,7 @@ def _get_changed_files_fast(root: Path, base: str) -> list[str]:
             ["git", "status", "--porcelain"],
             capture_output=True, text=True,
             cwd=str(root), timeout=_GIT_TIMEOUT_SECONDS,
+            stdin=subprocess.DEVNULL,
         )
         if result2.returncode == 0 and result2.stdout.strip():
             files.extend(_changed_files_from_status(result2.stdout))

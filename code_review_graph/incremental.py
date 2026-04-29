@@ -336,6 +336,7 @@ def _git_branch_info(repo_root: Path) -> tuple[str, str]:
             text=True,
             cwd=str(repo_root),
             timeout=_GIT_TIMEOUT,
+            stdin=subprocess.DEVNULL,
         )
         if result.returncode == 0:
             branch = result.stdout.strip()
@@ -348,6 +349,7 @@ def _git_branch_info(repo_root: Path) -> tuple[str, str]:
             text=True,
             cwd=str(repo_root),
             timeout=_GIT_TIMEOUT,
+            stdin=subprocess.DEVNULL,
         )
         if result.returncode == 0:
             sha = result.stdout.strip()
@@ -427,6 +429,7 @@ def get_changed_files(repo_root: Path, base: str = "HEAD~1") -> list[str]:
             text=True,
             cwd=str(repo_root),
             timeout=_GIT_TIMEOUT,
+            stdin=subprocess.DEVNULL,
         )
         if result.returncode != 0:
             # Fallback: try diff against empty tree (initial commit)
@@ -436,6 +439,7 @@ def get_changed_files(repo_root: Path, base: str = "HEAD~1") -> list[str]:
                 text=True,
                 cwd=str(repo_root),
                 timeout=_GIT_TIMEOUT,
+                stdin=subprocess.DEVNULL,
             )
         files = [f.strip() for f in result.stdout.splitlines() if f.strip()]
         return files
@@ -499,6 +503,7 @@ def get_staged_and_unstaged(repo_root: Path) -> list[str]:
             text=True,
             cwd=str(repo_root),
             timeout=_GIT_TIMEOUT,
+            stdin=subprocess.DEVNULL,
         )
         files = []
         for line in result.stdout.splitlines():
@@ -544,6 +549,7 @@ def get_all_tracked_files(
             text=True,
             cwd=str(repo_root),
             timeout=_GIT_TIMEOUT,
+            stdin=subprocess.DEVNULL,
         )
         return [f.strip() for f in result.stdout.splitlines() if f.strip()]
     except (FileNotFoundError, subprocess.TimeoutExpired):

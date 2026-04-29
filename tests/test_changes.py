@@ -2,7 +2,7 @@
 
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from code_review_graph.changes import (
     _parse_unified_diff,
@@ -157,6 +157,21 @@ class TestChanges:
         """Returns empty dict when git command fails."""
         result = parse_git_diff_ranges("/nonexistent/path", base="HEAD~1")
         assert result == {}
+
+    @patch("code_review_graph.changes.subprocess.run")
+    def test_parse_git_diff_ranges_detaches_stdin(self, mock_run):
+        """Git subprocesses must not inherit the MCP stdio pipe."""
+        import subprocess
+
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+
+        parse_git_diff_ranges(str(Path.cwd()), base="HEAD~1")
+
+        assert mock_run.call_args.kwargs.get("stdin") is subprocess.DEVNULL
 
     # ---------------------------------------------------------------
     # map_changes_to_nodes
